@@ -101,8 +101,46 @@ iprthres <- function (path) {
 }
 # iprthres(path= "/Users/phoebelam/Desktop/threshold")
 
-
-# return ipr based on vectors of year, family size, $ of children, and income
+#
+#' ipr calculator
+#'
+#' return ipr based user input of year, family size, # of children, and income
+#'
+#' @param year the year (2014 - 2019 only) of for the poverty threshold to use from: https://www.census.gov/data/tables/time-series/demo/income-poverty/historical-poverty-thresholds.html
+#' @param familysize the total number of people in the household
+#' @param children the number of individuals under age of 18
+#' @param income the family income
+#' @param result enter result = "ipr" to return ipr value and result = "threshold" to return threshold. defaults ipr if unspecified.
+#'
+#' @examples
+#' # if you have a vector of values
+#' iprcalc(year= c(2014, 2015, 2018),
+#'         familysize = c(4, 5, 2),
+#'        children = c(1, 3, 1),
+#'         income = c(32000, 45000, 5000))
+#'
+#' @examples
+#' # if you have just single values
+#' iprcalc(2015, 5, 3, 30000)
+#' iprcalc(2015, 5, 3, 30000, result = "threshold")
+#'
+#' @examples
+#' # if you have a dataframe with columns for the input
+#'
+#' # making fake data here
+#' numofppl <- c(3, 2, 5, 3)
+#' numofchildren <- c(1, 1, 2, 2)
+#' totincome <- c(30000, 60000, 15000, 10000)
+#' fake <- data.frame (numofppl, numofchildren, totincome)
+#'
+#' library(dplyr)
+#' fake %>%
+#'   mutate (ipr = iprcalc(2019, numofppl, numofchildren, totincome),
+#'           threshold = iprcalc(2019, numofppl, numofchildren, totincome,
+#'                               result = "threshold")) -> fake
+#' View (fake)
+#'
+#'
 #' @importFrom magrittr "%>%"
 #' @export
 iprcalc <- function (year, familysize, children, income,
@@ -130,59 +168,3 @@ iprcalc <- function (year, familysize, children, income,
 
 }
 
-# # testing with vectors of values
-# iprcalc(year= c(2014, 2015, 2018),
-#         familysize = c(4, 5, 2),
-#         children = c(1, 3, 1),
-#         income = c(32000, 45000, 5000))
-#
-# iprcalc(path = "/Users/phoebelam/Desktop/threshold",
-#         year= c(2014, 2015, 2018),
-#         familysize = c(4, 5, 2),
-#         children = c(1, 3, 1),
-#         income = c(32000, 45000, 5000),
-#         result = "threshold")
-#
-# # testing with single values
-# iprcalc(path = "/Users/phoebelam/Desktop/threshold",
-#         2015, 4, 2, 10000)
-#
-# iprcalc(path = "/Users/phoebelam/Desktop/threshold",
-#         2015, 4, 2, 10000, result = "threshold")
-#
-#
-# # testing with dataframe with dplyr application
-# test <- data.frame(year, familysize, children, income)
-# test %>%
-#   mutate (ipr = iprcalc("/Users/phoebelam/Desktop/threshold", year, familysize, children, income),
-#           threshold = iprcalc("/Users/phoebelam/Desktop/threshold", year, familysize, children, income,
-#                               result = "threshold")) -> test
-#
-
-
-# return the ipr based on user-input of year, family size, # of children, and income
-# can only take single values, not vectors
-# obsolete, the vector one below will handle this
-# iprcalc <- function (path, year, familysize, children, income) {
-#
-#   setwd(path)
-#   thres <- read.csv("consolidated threshold 2014 to 2019.csv")
-#
-#   thres %>%
-#     mutate_all(., ~as.numeric(as.character(.))) %>%
-#     rename (censusyear = year,
-#             size = familysize) -> thres
-#
-#   thres %>% filter (censusyear %in% year & size %in% familysize & child %in% children) %>%
-#     select (threshold) %>% as.numeric(.) -> x
-#
-#   ipr = income/x
-#
-#   return(ipr)
-#
-# }
-# iprcalc(path= "/Users/phoebelam/Desktop/threshold",
-#          year = 2014,
-#          familysize = 5,
-#          children = 3,
-#          income = 320000)
