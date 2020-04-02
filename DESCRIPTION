@@ -1,0 +1,14 @@
+Package: fhrc
+Title: provide fhrc lab with different r scripts
+Version: 0.0.0.9000
+Authors@R: 
+    person(given = "phoebe",
+           family = "lam",
+           role = c("aut", "cre"),
+           email = "phoebelam@u.northwestern.edu")
+Description: provide fhrc lab people with different automated scripts, all in one place.
+License: What license it uses
+Encoding: UTF-8
+LazyData: true
+Imports:
+	dplyr
