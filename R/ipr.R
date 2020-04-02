@@ -1,4 +1,5 @@
 # combines raw threshold files into one in long format
+#' @importFrom magrittr "%>%"
 #' @export
 iprthres <- function (path) {
   library (xlsx)
@@ -102,6 +103,7 @@ iprthres <- function (path) {
 
 
 # return ipr based on vectors of year, family size, $ of children, and income
+#' @importFrom magrittr "%>%"
 #' @export
 iprcalc <- function (year, familysize, children, income,
                      result = c("ipr", "threshold")) {
