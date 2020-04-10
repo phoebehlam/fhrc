@@ -4,8 +4,7 @@
 \alias{iprcalc}
 \title{ipr calculator}
 \usage{
-iprcalc(year, familysize, children, income, result = c("ipr",
-  "threshold"))
+iprcalc(year, familysize, children, income, result = c("ipr", "threshold"))
 }
 \arguments{
 \item{year}{the year (2014 - 2019 only) of for the poverty threshold to use from: https://www.census.gov/data/tables/time-series/demo/income-poverty/historical-poverty-thresholds.html}
@@ -16,7 +15,13 @@ iprcalc(year, familysize, children, income, result = c("ipr",
 
 \item{income}{the family income}
 
-\item{result}{enter result = "ipr" to return ipr value and result = "threshold" to return threshold. defaults ipr if unspecified.}
+\item{result}{enter result = "ipr" to return ipr value and result = "threshold" to return threshold. defaults ipr if unspecified.
+
+
+#' @examples
+# if you have just single values
+iprcalc(2015, 5, 3, 30000)
+iprcalc(2015, 5, 3, 30000, result = "threshold")}
 }
 \description{
 return ipr based user input of year, family size, # of children, and income
@@ -28,12 +33,7 @@ iprcalc(year= c(2014, 2015, 2018),
        children = c(1, 3, 1),
         income = c(32000, 45000, 5000))
 
-# if you have just single values
-iprcalc(2015, 5, 3, 30000)
-iprcalc(2015, 5, 3, 30000, result = "threshold")
-
-# if you have a dataframe with columns for the input
-
+# if you have a dataframe with columns for the input and want to use with dplyr
 # making fake data here
 numofppl <- c(3, 2, 5, 3)
 numofchildren <- c(1, 1, 2, 2)

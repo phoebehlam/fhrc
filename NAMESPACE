@@ -2,4 +2,6 @@
 
 export(iprcalc)
 export(iprthres)
+export(luminex)
+export(mwmh.fitbit)
 importFrom(magrittr,"%>%")

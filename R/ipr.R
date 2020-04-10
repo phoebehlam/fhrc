@@ -112,6 +112,12 @@ iprthres <- function (path) {
 #' @param income the family income
 #' @param result enter result = "ipr" to return ipr value and result = "threshold" to return threshold. defaults ipr if unspecified.
 #'
+#'
+#'#' @examples
+#' # if you have just single values
+#' iprcalc(2015, 5, 3, 30000)
+#' iprcalc(2015, 5, 3, 30000, result = "threshold")
+#'
 #' @examples
 #' # if you have a vector of values
 #' iprcalc(year= c(2014, 2015, 2018),
@@ -120,13 +126,7 @@ iprthres <- function (path) {
 #'         income = c(32000, 45000, 5000))
 #'
 #' @examples
-#' # if you have just single values
-#' iprcalc(2015, 5, 3, 30000)
-#' iprcalc(2015, 5, 3, 30000, result = "threshold")
-#'
-#' @examples
-#' # if you have a dataframe with columns for the input
-#'
+#' # if you have a dataframe with columns for the input and want to use with dplyr
 #' # making fake data here
 #' numofppl <- c(3, 2, 5, 3)
 #' numofchildren <- c(1, 1, 2, 2)
