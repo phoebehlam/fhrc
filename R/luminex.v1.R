@@ -6,6 +6,7 @@
 #' @examples
 #' luminex (path= "/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V1 Culture Sup Raw Data")
 #'
+#' @importFrom magrittr "%>%"
 #' @export
 luminex <- function (path) {
 
@@ -114,9 +115,25 @@ consol %>%
   filter(id_ligand %in% drep & Repeat == "R") -> temp
 drep[!drep %in% temp$id_ligand] %>% grep("102|310", ., invert=T, value = T) #these folks don't have repeats. checking with rachel.
 
-# remove the repeats for these folks now
+#actually rachel's list was not exhaustive. 
+#e.g., her list for 104, only has lps and il10, but in reality lps, crt, il10 all got repeated, which makes sense.
+#so. new rule:
 consol %>%
-  filter(!(Repeat == "R" & id_ligand %in% drep)) -> consol
+  mutate (dilute_rachel = case_when(id_ligand %in% drep~ 1)) %>%
+  group_by(ID) %>%
+  mutate (dilute_keep = case_when(any(dilute_rachel==1, na.rm=T) & Repeat=="R"~ 0,
+                                  TRUE~1)) %>%
+  ungroup()-> consol
+
+#check the ones in drep. 
+substr(drep, 1,3) %>% unique(.) -> id_drep
+consol %>% filter (ID %in% id_drep) %>% select(ID, ligand, Repeat, dilute_rachel, dilute_keep) %>% arrange(ID, dilute_keep) %>% View ()
+#check the ones not in drep.
+consol %>% filter (!ID %in% id_drep) %>% select(ID, ligand, Repeat, dilute_rachel, dilute_keep) %>% arrange(ID, dilute_keep) -> temp
+tabyl (temp$dilute_keep) #good.
+
+#ok, now exclude. 
+consol %>% filter (dilute_keep == 1) -> consol
 
 #all remaining repeats we want the last round
 consol %>%
@@ -157,8 +174,8 @@ consol %>%
 #check that they are on rachel's cv list
 #all remaining repeats should be part of cv
 consol %>%
-  filter(id_ligand %in% cvrep)-> temp
-cvrep[!cvrep %in% temp$id_ligand] #116crt6, 142lps,272il10.1, 292il10.1 are in both cv and dilute. 203r848 had asthma removed. double check with greg those 3 we still want first time values.
+  filter(id_ligand %in% cvrep & Repeat == "R")-> temp
+cvrep[!cvrep %in% temp$id_ligand] #116crt6, 142lps,272il10.1, 292il10.1 are in both cv and dilute. 203r848 had asthma removed.
 
 #now exclude originals and keep only the last ones
 consol %>%
@@ -171,8 +188,11 @@ consol %>%
   filter(keep==1) %>%
   select(ID:tnfa.mfi, il8.ext:tnfa.cv, filename)->consol
 
+colnames(consol) <- tolower(colnames(consol))
 
 write.csv(consol, "mwmh_v1_all data_4.10.20.csv", row.names= FALSE)
+
+
 
 
 
