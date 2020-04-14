@@ -4,12 +4,14 @@
 #' 
 #' @param path the folder to which all the individual files are saved
 #' @examples
-#' luminex.v2 (path= "/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V1 Culture Sup Raw Data")
+#' luminex.v2 (path= "/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data")
 #'
 #' 
 #' @importFrom magrittr "%>%"
 #' @export
 luminex.v2 <- function(path) {
+  
+  setwd(path)
   
   filenames = intersect(list.files(path=path,pattern = ".xlsx" ,full.names= TRUE, recursive=FALSE),
                         list.files(path=path, pattern = "MWMH" ,full.names= TRUE, recursive=FALSE))
@@ -23,10 +25,28 @@ luminex.v2 <- function(path) {
     
     print(f)
     
+    #dilution factor
+    # dil <- xlsx::read.xlsx("Luminex MWMH 103-110 V2 Culture Sups IL6 IL8 IL1b TNFa 11012019.xlsx",
+    #                        sheetName = "Raw Data")
+    # dil <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 131-139 V2 Culture Sups IL6 IL8 IL1b TNFa 10022019_edited.xlsx",
+    #                          sheetName = "Raw Data")
+    dil <- xlsx::read.xlsx(f, sheetName = "Raw Data")
+    which(dil$NA. == "Dilution Factor")+1 -> start
+    which(dil$xPONENT=="Analysis Types")-1 -> end
+    dil[start:end,] %>%
+      dplyr::select(xPONENT, NA.) %>%
+      dplyr::rename(Sample = xPONENT,
+                    dilution = NA.) %>%
+      dplyr::distinct(Sample, .keep_all = T) %>%
+      dplyr::filter(!(grepl("Standard|Background|CNTR|CTR|TM", Sample)==T)) -> dil
+    
+    
     #extrapolated values
     # exdat <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 100 dilution repeats V2 and OTRV2 test Culture Sups IL6 IL8 IL1b TNFa 12032020.xlsx",
     #                          sheetName = "Avg Result", startRow = 2)
     # exdat <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 50 dilution + CV repeats V2 Culture Sups IL6 IL8 IL1b TNFa 11122019_LH.xlsx",
+    #                          sheetName = "Avg Result", startRow = 2)
+    # exdat <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 131-139 V2 Culture Sups IL6 IL8 IL1b TNFa 10022019_edited.xlsx",
     #                          sheetName = "Avg Result", startRow = 2)
     exdat <- xlsx::read.xlsx(f, sheetName = "Avg Result",startRow = 2)
     which(colnames(exdat)=="IL.8")->x
@@ -44,7 +64,7 @@ luminex.v2 <- function(path) {
       dplyr::mutate(filename.ext=basename(f))->exdat
     
     #cv
-    # cvdat <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 100 dilution repeats V2 and OTRV2 test Culture Sups IL6 IL8 IL1b TNFa 12032020.xlsx",
+    # cvdat <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 131-139 V2 Culture Sups IL6 IL8 IL1b TNFa 10022019_edited.xlsx",
     #                          sheetName = "%CV Replicates", startRow = 2)
     
     cvdat <- xlsx::read.xlsx(f, sheetName = "%CV Replicates",startRow = 2)
@@ -65,7 +85,11 @@ luminex.v2 <- function(path) {
     #mfi values
     # mfidat <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 100 dilution repeats V2 and OTRV2 test Culture Sups IL6 IL8 IL1b TNFa 12032020.xlsx",
     #                           sheetName = "Avg Net MFI", startRow = 2)
-
+    # mfidat <- xlsx::read.xlsx("Luminex MWMH 103-110 V2 Culture Sups IL6 IL8 IL1b TNFa 11012019.xlsx",
+    #                           sheetName = "Avg Net MFI", startRow = 2)
+    # mfidat <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 131-139 V2 Culture Sups IL6 IL8 IL1b TNFa 10022019_edited.xlsx",
+    #                          sheetName = "Avg Net MFI", startRow = 2)
+    
     mfidat <- xlsx::read.xlsx(f, sheetName = "Avg Net MFI",startRow = 2)
     mfidat %>%
       dplyr::select(Sample:TNF.a) %>%
@@ -79,7 +103,8 @@ luminex.v2 <- function(path) {
     
     #merge
     temp <- merge(mfidat, exdat, by = "Sample", all = T)
-    together <- merge(temp, cvdat, by = "Sample", all = T)
+    temp2 <- merge(temp, cvdat, by = "Sample", all = T)
+    together<- merge(temp2, dil, by = "Sample", all.x = T)
     
     consol <- readRDS("consolidated.RDS")
     consol <- gtools::smartbind(consol,together)
@@ -94,8 +119,10 @@ luminex.v2 (path= "/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My Wor
 library(dplyr)
 library(janitor)
 library(xlsx)
-consol <- readRDS("consolidated.RDS")[-1,-1]
-consol %>% filter(is.na(Sample)==F & is.na(ID.x)==T) #checked with lauren. these are all data we did not want (e.g., otr tests or control)
+
+setwd("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex")
+consol <- readRDS("Raw Data/MWMH V2 Culture Sup Raw Data/consolidated.RDS")[-1,-1]
+consol %>% filter(is.na(Sample)==F & is.na(ID.x)==T)%>% View () #checked with lauren. these are all data we did not want (e.g., otr tests or control)
 consol %>% filter(is.na(ID.x)==F) -> consol
 
 #check if the ID and ligand columns are redundant. yup. remove one of them.
@@ -104,154 +131,58 @@ consol %>% select(-c(ID.y, ligand.y)) %>%
   rename(id = ID.x,
          ligand = ligand.x) -> consol
 
-#checking id
-tabyl (consol$id) %>% filter(n !=10) %>% View ()
-tabyl(consol$id) %>% 
-  filter (n>10) %>%
-  as.data.frame() %>%
-  rename(idfreq= 1) -> temp
+#fixing idiosyncrasies in spelling
+tabyl (consol$ligand, show_missing_levels = F)
+consol$ligand %>%
+  gsub("AGE BSA|AGEBSA", "AGE-BSA", .) %>%
+  gsub("CRT 6", "CRT-6", .) %>%
+  gsub("IL10 0.02", "IL10-0.02", .) %>%
+  gsub("IL10 0.1", "IL10-0.1", .) -> consol$ligand
+
+#checking diluton factor
+tabyl (consol$dilution, show_missing_levels = F)
+consol %>% filter(dilution == 1) %>% View () #lauren said if it's 1 (missing), it's meant to be 20
 consol %>%
-  filter(id %in% temp$idfreq) %>%
-  arrange(id, ligand)-> repeats
+  mutate(dilution = case_when(dilution == 1~ 20,
+                              TRUE~ as.numeric(as.character(dilution)))) -> consol
 
-#create new variable that shows how many files we got cv and ext from
-repeats %>%
-  group_by(id, ligand) %>%
-  mutate(ext_distinct=n_distinct(filename.ext),
-         cv_distinct=n_distinct(filename.cv)) %>%
-  ungroup()-> repeats
+#remove all dilution factor 50 or 100 (because for these we want first round values)
+consol %>% filter(dilution == 20) -> consol 
 
-#repeated 3 times
-repeats %>%
-  filter(ext_distinct>2) %>% View()
+#now take care of remaining repeats, which should all be cv repeats
+#check that cv and mfi came from same file
+consol %>% filter(filename.mfi != filename.cv) #check.
 
-#create new variable to ensure that the file for cv and data are the same filecv-filedat should equal 0
-repeats %>%
-  mutate(diff_cvdat=fromdat_diff-fromcvdat_diff) ->repeats
-repeats %>% filter(diff_cvdat!= 0) #check.
-
-#port in the list of dilution repeats from rachel
-#hmm doesn't make sense
-
-repeats %>% filter(grepl("repeat", filename.mfi, ignore.case=T)==F) %>%
-  group_by(id) %>%
-  add_count(id, name = "n_repeated") %>%
-  ungroup() -> test
-
-test %>% select(Sample, id, ligand, n_repeated) %>% View ()
-tabyl (test$n_repeated)
-
-
-
-#from repeats grab anything that has only 1 piece of data, 
-#if there are 2 pieces and one is repeat, then grab repeats
-#if 2 pieces of data and no repeats grab two pieces of data
-#if there are 3 pieces of data grab all 3
-repeats %>%
-  mutate(repeatyn = case_when(grepl("Repeats", fromdat,ignore.case= TRUE) == TRUE & 
-                                grepl("no repeats", fromdat,ignore.case= TRUE) ==FALSE~1,
-                              TRUE~0) ) -> repeats
-
-repeats %>%
-  select(ID, ligand, IL.8, fromdat, repeatyn, fromdat_diff) %>% View()
-
-
-repeats %>%
-  group_by(ID, ligand) %>% 
-  mutate(repeatyn_diff=n_distinct(repeatyn)) -> repeats
-
-
-repeats %>%
-  mutate(grab= case_when(fromdat_diff==1~ 1,
-                         fromdat_diff==2 & repeatyn==1~1,
-                         fromdat_diff==2 & repeatyn==0 & repeatyn_diff==1~1,
-                         fromdat_diff==3~1)) ->repeats
-
-View (repeats)
-
-repeats %>%
-  # filter (fromdat_diff==2 & repeatyn==0) %>% 
-  select(ID, ligand, IL.8, fromdat, repeatyn, repeatyn_diff, fromdat_diff, grab) %>% View()
-
-repeats %>%
-  filter(grab==1) ->goodrepeat
-
-tabyl(goodrepeat$ID) %>% View()
-
-goodrepeat %>%
-  filter(ID==131) -> onethirtyone
-
-setwd('C:/Users/lch593/Box/FHRC/NIH R01 My World My Heart Study (MWMH)/Wetlab/Luminex/Raw Data')
-write.xlsx(onethirtyone,"C:/Users/lch593/Box/FHRC/NIH R01 My World My Heart Study (MWMH)/Wetlab/Luminex/Raw Data")
-
-
-#kick out anything with n>10 from consol to create goodconsol
+#add a tag to wells that are repeated and and a tag 
 consol %>%
-  group_by (ID) %>%
-  add_count(ID, name="ID_count") %>%
-  ungroup () %>%
-  filter (ID_count <= 10) %>%
-  arrange(ID, ligand) -> goodconsol
+  group_by(id, ligand) %>% 
+  mutate (datdiff = n_distinct(filename.mfi)) %>%
+  ungroup() %>%
+  group_by(id, ligand, datdiff) %>%
+  mutate(count = row_number()) %>%
+  ungroup() %>%
+  arrange(id,ligand)-> consol
 
-merge(goodconsol,goodrepeat,all=TRUE)->finallong
+# special cases from lauren:
+# 131: mutichannel pipet error on first plate, or 131 we can pull from every file except 123-131 file (no problem here, same as cv run)
+# 260 LPS: go with original for this one (need special handling)
+consol %>% filter(id == 131) %>% select(id, ligand, filename.mfi, datdiff, count) %>% View ()
 
+consol %>%
+  mutate(grab = case_when(id == 260 & ligand == "LPS" & count == 1~ 1,
+                          id == 260 & ligand == "LPS" & count == 2~ 0,
+                          datdiff == 1~ 1,
+                          datdiff == 2 & count == 2~ 1,
+                          TRUE~0)) -> consol
+tabyl (consol$datdiff)
+tabyl (consol$grab) #perfect. half of the repeats.
+consol %>% filter(id == 260) %>% View () #good, special case handled. 
 
+consol %>%
+  filter(grab == 1) -> consol
 
+# missing unstim for 131
+tabyl (consol$id) %>% filter (n!=10)
+tabyl(consol$id, show_missing_levels = F, show_na = F) %>% nrow()
 
-
-#check and fish out
-tabyl (finallong$ligand)
-
-finallong %>%
-  filter(ligand == "AGEBSA") %>% select (ID, fromdat) %>% View()
-
-
-
-#create a trimmed dataset that only has the columns you want
-
-finallong %>%
-  select(ID, ligand, IL.8, IL.6, IL.1b,TNF.a, IL.8cv, IL.6cv, IL.1bcv, TNF.acv)->trim
-
-#cleaning
-#recode >1.58 to 1.57
-trim %>%
-  mutate(Il.8_cl= case_when(IL.8== "< 1.58"~1.57,
-                            TRUE~IL.8))
-
-#tabyl each of the clean to check
-
-
-
-#facor-->character-->numeric, cannot do factor-->numeric
-final %>%
-  mutate(ligand=as.character(ligand),
-         IL.8_cl=as.numeric(as.character(IL.8)),
-         IL.1b=as.character(IL.1b),
-         IL.6=as.character(IL.6),
-         TNF.a=as.character(TNF.a),
-         IL.8cv=as.character(IL.8cv),
-         IL.1bcv=as.character(IL.1bcv),
-         IL.6cv=as.character(IL.6cv),
-         TNF.acv=as.character(TNF.acv))->final
-
-
-pivot_wider(final, names_from= 'ligand', values_from = c("IL.8", "IL.1b", "IL.6","TNF.a", "IL.8cv","IL.1bcv",
-                                                         "IL.6cv", "TNF.acv"))->wide
-
-setwd('C:/Users/lch593/Box/FHRC/NIH R01 My World My Heart Study (MWMH)/Wetlab/Luminex/Raw Data')
-
-write.xlsx(wide, "wide.xlsx")
-
-write.xlsx(wide, "wide.xlsx", sheetName = "Sheet1", col.names = TRUE, row.names = FALSE)
-
-
-tabyl (final$ligand)
-
-gsub("IL10 0.02", "IL10-0.02", final$ligand) -> final$ligand
-gsub("IL10 0.1", "IL10-0.1", consol$ligand) -> final$ligand
-gsub("IL-10-0.5", "IL10-0.5", consol$ligand) -> consol$ligand
-gsub("IL-10 0.02", "IL10-0.02", consol$ligand) -> consol$ligand
-gsub("IL-10 0.1", "IL10-0.1", consol$ligand) -> consol$ligand
-gsub("IL-10 0.5", "IL10-0.5", consol$ligand) -> consol$ligand
-gsub("AGE-BSA", "AGEBSA", consol$ligand) -> consol$ligand
-
+saveRDS(consol, "Consolidated Data/V2 consolidated data/consolidated.RDS")
