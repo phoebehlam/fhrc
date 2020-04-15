@@ -185,4 +185,14 @@ consol %>%
 tabyl (consol$id) %>% filter (n!=10)
 tabyl(consol$id, show_missing_levels = F, show_na = F) %>% nrow()
 
+#export out the consolidated raw file (reordered variables a bit)
+consol %>% select(id, ligand, il8.mfi:filename.mfi, il8.ext:filename.cv, Sample, dilution:grab) -> consol
 saveRDS(consol, "Consolidated Data/V2 consolidated data/consolidated.RDS")
+#export out the consolidated raw (trimmed) csv file for folks
+consol %>% select(id, ligand, il8.mfi:filename.mfi, il8.ext:filename.cv) -> trim
+write.csv(trim, "Consolidated Data/V2 consolidated data/mwmh_v2_all data_4.14.20.csv", row.names=F)
+
+
+
+
+
