@@ -190,8 +190,9 @@ consol %>%
 
 colnames(consol) <- tolower(colnames(consol))
 
-write.csv(consol, "mwmh_v1_all data_4.10.20.csv", row.names= FALSE)
-
+setwd("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/")
+write.csv(consol, "Consolidated Data/V1 consolidated data/mwmh_v1_prescoreddata_4.10.20.csv", row.names= FALSE)
+saveRDS(consol, "Consolidated Data/V1 consolidated data/mwmh_v1_prescored data_4.10.20.RDS")
 
 
 

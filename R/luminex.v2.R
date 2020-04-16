@@ -119,6 +119,7 @@ luminex.v2 (path= "/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My Wor
 library(dplyr)
 library(janitor)
 library(xlsx)
+library(psych)
 
 setwd("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex")
 consol <- readRDS("Raw Data/MWMH V2 Culture Sup Raw Data/consolidated.RDS")[-1,-1]
@@ -166,8 +167,6 @@ consol %>%
 # special cases from lauren:
 # 131: mutichannel pipet error on first plate, or 131 we can pull from every file except 123-131 file (no problem here, same as cv run)
 # 260 LPS: go with original for this one (need special handling)
-consol %>% filter(id == 131) %>% select(id, ligand, filename.mfi, datdiff, count) %>% View ()
-
 consol %>%
   mutate(grab = case_when(id == 260 & ligand == "LPS" & count == 1~ 1,
                           id == 260 & ligand == "LPS" & count == 2~ 0,
@@ -181,16 +180,14 @@ consol %>% filter(id == 260) %>% View () #good, special case handled.
 consol %>%
   filter(grab == 1) -> consol
 
-# missing unstim for 131
-tabyl (consol$id) %>% filter (n!=10)
-tabyl(consol$id, show_missing_levels = F, show_na = F) %>% nrow()
+# checking id
+tabyl (consol$id) %>% filter (n!=10) #good.
+tabyl(consol$id, show_missing_levels = F, show_na = F) %>% nrow() #236 participants
 
 #export out the consolidated raw file (reordered variables a bit)
 consol %>% select(id, ligand, il8.mfi:filename.mfi, il8.ext:filename.cv, Sample, dilution:grab) -> consol
-saveRDS(consol, "Consolidated Data/V2 consolidated data/consolidated.RDS")
-#export out the consolidated raw (trimmed) csv file for folks
-consol %>% select(id, ligand, il8.mfi:filename.mfi, il8.ext:filename.cv) -> trim
-write.csv(trim, "Consolidated Data/V2 consolidated data/mwmh_v2_all data_4.14.20.csv", row.names=F)
+saveRDS(consol, "Consolidated Data/V2 consolidated data/mwmh_v2_prescored data_4.14.20.RDS")
+write.csv(consol, "Consolidated Data/V2 consolidated data/mwmh_v2_prescored data_4.14.20.csv", row.names=F)
 
 
 
