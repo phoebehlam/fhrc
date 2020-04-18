@@ -30,6 +30,9 @@ luminex.v2 <- function(path) {
     #                        sheetName = "Raw Data")
     # dil <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 131-139 V2 Culture Sups IL6 IL8 IL1b TNFa 10022019_edited.xlsx",
     #                          sheetName = "Raw Data")
+    # dil <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 187-208 V2 RWT 101119_20191011_154700_edited.xlsx",
+    #                          sheetName = "Raw Data")
+    
     dil <- xlsx::read.xlsx(f, sheetName = "Raw Data")
     which(dil$NA. == "Dilution Factor")+1 -> start
     which(dil$xPONENT=="Analysis Types")-1 -> end
@@ -48,6 +51,8 @@ luminex.v2 <- function(path) {
     #                          sheetName = "Avg Result", startRow = 2)
     # exdat <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 131-139 V2 Culture Sups IL6 IL8 IL1b TNFa 10022019_edited.xlsx",
     #                          sheetName = "Avg Result", startRow = 2)
+    # exdat <- xlsx::read.xlsx("/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data/Luminex MWMH 187-208 V2 RWT 101119_20191011_154700_edited.xlsx",
+    #                          sheetName = "Avg Result",startRow = 2)
     exdat <- xlsx::read.xlsx(f, sheetName = "Avg Result",startRow = 2)
     which(colnames(exdat)=="IL.8")->x
     exdat %>%
@@ -113,7 +118,7 @@ luminex.v2 <- function(path) {
   }
 }
 
-luminex.v2 (path= "/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data")
+# luminex.v2 (path= "/Users/phoebelam/Box/FHRC (Weinberg Box Admin)/NIH R01 My World My Heart Study (MWMH)/Wetlab/Immunoassays/Luminex/Raw Data/MWMH V2 Culture Sup Raw Data")
 
 # manual cleaning
 library(dplyr)
@@ -182,12 +187,16 @@ consol %>%
 
 # checking id
 tabyl (consol$id) %>% filter (n!=10) #good.
-tabyl(consol$id, show_missing_levels = F, show_na = F) %>% nrow() #236 participants
+tabyl(consol$id, show_missing_levels = F, show_na = F) %>% nrow() #254 participants
+
+c(103:382) -> should
+should[should %in% consol$id==F] # all checked against inventory sheet, all supposed to be missing
+
 
 #export out the consolidated raw file (reordered variables a bit)
 consol %>% select(id, ligand, il8.mfi:filename.mfi, il8.ext:filename.cv, Sample, dilution:grab) -> consol
-saveRDS(consol, "Consolidated Data/V2 consolidated data/mwmh_v2_prescored data_4.14.20.RDS")
-write.csv(consol, "Consolidated Data/V2 consolidated data/mwmh_v2_prescored data_4.14.20.csv", row.names=F)
+saveRDS(consol, "Consolidated Data/V2 consolidated data/mwmh_v2_prescored data_4.17.20.RDS")
+write.csv(consol, "Consolidated Data/V2 consolidated data/mwmh_v2_prescored data_4.17.20.csv", row.names=F)
 
 
 
