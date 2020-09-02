@@ -359,7 +359,7 @@ sleeplog <- function(path, id, Study, visit) {
   }
   
   track %>%
-    rename (should0 = Lab.Visit.Date,
+    dplyr::rename (should0 = Lab.Visit.Date,
             dd1log = DD.Day.1..Night.) %>%
     dplyr::filter (ID == id) -> track
   
@@ -423,10 +423,10 @@ sleeplog <- function(path, id, Study, visit) {
   
   if (nrow (log) > 0) {
     
-    #add weekday and then rename ID to id to match other sheets
+    #add weekday and then dplyr::rename ID to id to match other sheets
     trackl %>%
       dplyr::mutate (should.wd = weekdays(as.Date(should))) %>%
-      rename (id = ID) %>%
+      dplyr::rename (id = ID) %>%
       dplyr::select (-time) %>%
       dplyr::mutate (time = "21:00:00") %>%
       dplyr::mutate (s_rep.shoulddt = as.character(as.POSIXct(paste(.$s_rep.should, .$time), format="%Y-%m-%d %H:%M:%S"))) -> trackl
@@ -504,7 +504,7 @@ sleeplog <- function(path, id, Study, visit) {
                      med_text = dplyr::case_when (med_text == "ERROR"~ NA_character_,
                                                   TRUE~ as.character(med_text))) %>%
       dplyr::mutate (duration_sum_human = duration_sum) %>%
-      rename (date = match,
+      dplyr::rename (date = match,
               weekday = should.wd) %>%
       dplyr::mutate (day = dplyr::case_when(is.na(day)==FALSE~ paste("day", day, sep = " "),
                                             is.na(day)==TRUE~ "day extra")) %>%
