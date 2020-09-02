@@ -360,7 +360,7 @@ sleeplog <- function(path, id, Study, visit) {
   
   track %>%
     dplyr::rename (should0 = Lab.Visit.Date,
-            dd1log = DD.Day.1..Night.) %>%
+                   dd1log = DD.Day.1..Night.) %>%
     dplyr::filter (ID == id) -> track
   
   if (track$should0+1 == track$dd1log) {
