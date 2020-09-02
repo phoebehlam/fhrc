@@ -1,4 +1,4 @@
-#'@importfrom magrittr "%>%"
+#'@importFrom magrittr "%>%"
 #'@export
 sleeplog <- function(path, id, Study, visit) {
   
@@ -7,6 +7,10 @@ sleeplog <- function(path, id, Study, visit) {
   # library(tidyr)
   # library(gtools)
   # library (lubridate)
+  
+  #troubleshoot
+  # file <- read.csv("MHS/MHS V1 Daily Diary Day 1_August 19, 2020_16.42.csv", header = T)
+  # day8check = 1
 
   setwd (path)
   log <- data.frame(matrix(ncol = 1, nrow = 1))
@@ -20,8 +24,7 @@ sleeplog <- function(path, id, Study, visit) {
   
   for (f in filenames) { # do not run this line when we troubleshooting
     print (f)
-    #read.csv?
-    file <- read.csv (filename, header= TRUE) # skip this for troubleshooting
+    file <- read.csv (f, header= TRUE) # skip this for troubleshooting
     
     file %>%
       dplyr::mutate (firstname.check = as.numeric(as.character(RecipientFirstName)),
@@ -36,7 +39,7 @@ sleeplog <- function(path, id, Study, visit) {
     if (any (file$goodid == id, na.rm=T) == TRUE) { #skip for troubleshooting
       
       #grab day number from the file name (skip for troubleshooting)
-      basename(filename) %>%
+      basename(f) %>%
         gsub ("OTR V1 Daily Diary Day ", "", .) %>%
         gsub ("OTR V2 Daily Diary Day ", "", .) %>%
         gsub ("V2 OTR Daily Diary Day ", "", .) %>%
@@ -75,10 +78,9 @@ sleeplog <- function(path, id, Study, visit) {
           dplyr::mutate (s.rep_actual.adj = dplyr::case_when (hour < 21 ~ as.Date(Date)-1,
                                                               TRUE ~ as.Date(Date))) %>%
           dplyr::mutate (actual = dplyr::case_when (hour < 21 ~ as.Date(Date)-2,
-                                                    TRUE ~ as.Date(Date) - 1)) -> file6+
-          
-          
-          file$actual.wd <- weekdays(as.Date(file$actual))
+                                                    TRUE ~ as.Date(Date) - 1)) -> file
+        
+        file$actual.wd <- weekdays(as.Date(file$actual))
         file$s_rep.actual_weekday <- weekdays(as.Date(file$s.rep_actual.adj))
         
         
@@ -132,16 +134,16 @@ sleeplog <- function(path, id, Study, visit) {
         
         #computing duration by each occassion, only treating PM -> AM versions for now
         file %>%  
-          dplyr::mutate (duration1 = dplyr::case_when (ampmcheck1 == 1 ~ as.numeric(as.character(difftime(file$puton1t + hours (24), file$remove1t, units= "mins"))),
+          dplyr::mutate (duration1 = dplyr::case_when (ampmcheck1 == 1 ~ as.numeric(as.character(difftime(file$puton1t + lubridate::hours (24), file$remove1t, units= "mins"))),
                                                        TRUE ~ as.numeric (as.character (difftime(puton1t, remove1t, units= "mins")))),
                          
-                         duration2 = dplyr::case_when (ampmcheck2 == 1 ~ as.numeric(as.character(difftime(file$puton2t + hours (24), file$remove2t, units= "mins"))),
+                         duration2 = dplyr::case_when (ampmcheck2 == 1 ~ as.numeric(as.character(difftime(file$puton2t + lubridate::hours (24), file$remove2t, units= "mins"))),
                                                        TRUE ~ as.numeric (as.character (difftime(puton2t, remove2t, units= "mins")))),
                          
-                         duration3 = dplyr::case_when (ampmcheck3 == 1 ~ as.numeric(as.character(difftime(file$puton3t + hours (24), file$remove3t, units= "mins"))),
+                         duration3 = dplyr::case_when (ampmcheck3 == 1 ~ as.numeric(as.character(difftime(file$puton3t + lubridate::hours (24), file$remove3t, units= "mins"))),
                                                        TRUE ~ as.numeric (as.character (difftime(puton3t, remove3t, units= "mins")))),
                          
-                         duration4 = dplyr::case_when (ampmcheck4 == 1 ~ as.numeric(as.character(difftime(file$puton4t + hours (24), file$remove4t, units= "mins"))),
+                         duration4 = dplyr::case_when (ampmcheck4 == 1 ~ as.numeric(as.character(difftime(file$puton4t + lubridate::hours (24), file$remove4t, units= "mins"))),
                                                        TRUE ~ as.numeric (as.character (difftime(puton4t, remove4t, units= "mins"))))) -> file
         
         #computing duration for the day
@@ -165,7 +167,7 @@ sleeplog <- function(path, id, Study, visit) {
                         rawcompdt, rawcompdate, rawcomptime) -> file1
         
         log <- xlsx::read.xlsx2 ("sleeplog.xlsx", sheetIndex = 1, startRow=1)
-        log <- smartbind (log, file1)
+        log <- gtools::smartbind (log, file1)
         xlsx::write.xlsx(log, "sleeplog.xlsx", row.names = FALSE)
         
         file %>% 
@@ -180,7 +182,7 @@ sleeplog <- function(path, id, Study, visit) {
         
         
         other <- xlsx::read.xlsx2 ("otherlog.xlsx", sheetIndex = 1, startRow=1)
-        other <- smartbind (other, file2)
+        other <- gtools::smartbind (other, file2)
         xlsx::write.xlsx (other, "otherlog.xlsx", row.names = FALSE)
         
       } else { #skip this one line, but do the next one
@@ -258,16 +260,16 @@ sleeplog <- function(path, id, Study, visit) {
         
         #computing duration by each occassion, only treating PM -> AM versions for now
         file %>%  
-          dplyr::mutate (duration1 = dplyr::case_when (ampmcheck1 == 1 ~ as.numeric(as.character(difftime(file$puton1t + hours (24), file$remove1t, units= "mins"))),
+          dplyr::mutate (duration1 = dplyr::case_when (ampmcheck1 == 1 ~ as.numeric(as.character(difftime(file$puton1t + lubridate::hours (24), file$remove1t, units= "mins"))),
                                                        TRUE ~ as.numeric (as.character (difftime(puton1t, remove1t, units= "mins")))),
                          
-                         duration2 = dplyr::case_when (ampmcheck2 == 1 ~ as.numeric(as.character(difftime(file$puton2t + hours (24), file$remove2t, units= "mins"))),
+                         duration2 = dplyr::case_when (ampmcheck2 == 1 ~ as.numeric(as.character(difftime(file$puton2t + lubridate::hours (24), file$remove2t, units= "mins"))),
                                                        TRUE ~ as.numeric (as.character (difftime(puton2t, remove2t, units= "mins")))),
                          
-                         duration3 = dplyr::case_when (ampmcheck3 == 1 ~ as.numeric(as.character(difftime(file$puton3t + hours (24), file$remove3t, units= "mins"))),
+                         duration3 = dplyr::case_when (ampmcheck3 == 1 ~ as.numeric(as.character(difftime(file$puton3t + lubridate::hours (24), file$remove3t, units= "mins"))),
                                                        TRUE ~ as.numeric (as.character (difftime(puton3t, remove3t, units= "mins")))),
                          
-                         duration4 = dplyr::case_when (ampmcheck4 == 1 ~ as.numeric(as.character(difftime(file$puton4t + hours (24), file$remove4t, units= "mins"))),
+                         duration4 = dplyr::case_when (ampmcheck4 == 1 ~ as.numeric(as.character(difftime(file$puton4t + lubridate::hours (24), file$remove4t, units= "mins"))),
                                                        TRUE ~ as.numeric (as.character (difftime(puton4t, remove4t, units= "mins"))))) -> file
         
         #computing duration for the day
@@ -290,7 +292,7 @@ sleeplog <- function(path, id, Study, visit) {
                         rawcompdt, rawcompdate, rawcomptime) -> file1
         
         log <- xlsx::read.xlsx2 ("sleeplog.xlsx", sheetIndex = 1, startRow=1)
-        log <- smartbind (log, file1)
+        log <- gtools::smartbind (log, file1)
         xlsx::write.xlsx(log, "sleeplog.xlsx", row.names = FALSE)
         
         file %>% 
@@ -302,7 +304,7 @@ sleeplog <- function(path, id, Study, visit) {
                          Remove4, PutOn4, RemoveReason4, duration_sum, d.rep_actual.adj) -> file2
         
         other <- xlsx::read.xlsx2 ("otherlog.xlsx", sheetIndex = 1, startRow=1)
-        other <- smartbind (other, file2)
+        other <- gtools::smartbind (other, file2)
         xlsx::write.xlsx (other, "otherlog.xlsx", row.names = FALSE)
         
       }
@@ -327,33 +329,33 @@ sleeplog <- function(path, id, Study, visit) {
   
   #AUBREY'S HOMEWORK IS TO ADAPT PATH TO BE USER-INPUT PATH
   #can try different combinations here as well, just make sure to delete, or turn them into comments, before you run the entire code
-  Study = "OTR"
-  visit = 2
+  # Study = "OTR"
+  # visit = 2
   
   #RUN THE IF FOR THE TROUBLESHOOT TO SEE WHETHER THE "IF" LOGIC WORKS
   #OTRV1
   if (Study == "OTR" & visit == 1)  {
-    track <- xlsx::read.xlsx ("C:path/OTR/OTR DRI Actigraphy Tracking.xlsx", startRow = 3, header = TRUE, sheetName = "V1 Actigraphy")
+    track <- xlsx::read.xlsx (paste(path, "/OTR/OTR DRI Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "V1 Actigraphy")
     
     #OTRV2
   }else if (Study == "OTR" & visit == 2)  {
-    track <- xlsx::read.xlsx ("C:path/OTR/OTR DRI Actigraphy Tracking.xlsx", startRow = 3, header = TRUE, sheetName = "V2 Actigraphy")
+    track <- xlsx::read.xlsx (paste(path, "/OTR/OTR DRI Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "V2 Actigraphy")
     
     #MHS Mentor V1  
   }else if (Study == "MHS" & mhsid==1 & visit == 1 ) {
-    track <- xlsx::read.xlsx ("C:/path/MHS/MHS Actigraphy Tracking.xlsx", startRow = 3, header = TRUE, sheetName = "Mentor V1")
+    track <- xlsx::read.xlsx (paste(path, "/MHS/MHS Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "Mentor V1")
     
     #MHS Mentor V2
   }else if (Study == "MHS" & mhsid==1 & visit == 1 ) {
-    track <- xlsx::read.xlsx ("C:/path/MHS/MHS Actigraphy Tracking.xlsx", startRow = 3, header = TRUE, sheetName = "Mentor V2")
+    track <- xlsx::read.xlsx (paste(path, "/MHS/MHS Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "Mentor V2")
     
     #MHS Mentee V1
   }else if (Study == "MHS" & mhsid==2 & visit == 1 ) {
-    track <- xlsx::read.xlsx ("C:path/MHS/MHS Actigraphy Tracking.xlsx", startRow = 3, header = TRUE, sheetName = "Mentee V1")
+    track <- xlsx::read.xlsx (paste(path, "/MHS/MHS Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "Mentee V1")
     
     #MHS Mentee V2  
   }else if (Study == "MHS" & mhsid==2 & visit == 2 ) {
-    track <- xlsx::read.xlsx ("C:path/MHS/MHS Actigraphy Tracking.xlsx", startRow = 3, header = TRUE, sheetName = "Mentee V2")
+    track <- xlsx::read.xlsx (paste(path, "/MHS/MHS Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "Mentee V2")
   }
   
   track %>%
@@ -525,3 +527,6 @@ sleeplog <- function(path, id, Study, visit) {
   
   
 }
+
+
+
