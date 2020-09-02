@@ -2,6 +2,6 @@
 
 export(iprcalc)
 export(iprthres)
-export(luminex)
 export(mwmh.fitbit)
+export(sleeplog)
 importFrom(magrittr,"%>%")
