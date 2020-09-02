@@ -462,8 +462,8 @@ sleeplog <- function(path, id, Study, visit) {
     #binging alert
     #binge defined by two entries indexing the same sleep date
     merge1 %>%
-      dplyr::mutate (inbed.rowdiff = should - lag(should),
-                     inbed.rowdiff2 = should - lead(should)) %>%
+      dplyr::mutate (inbed.rowdiff = should - dplyr::lag(should),
+                     inbed.rowdiff2 = should - dplyr::lead(should)) %>%
       dplyr::mutate (binge = dplyr::case_when (inbed.rowdiff == 0 | inbed.rowdiff2 == 0 ~ "binge",
                                                is.na(inbed.rowdiff)==TRUE & is.na(inbed.rowdiff2)==TRUE ~ NA_character_, 
                                                TRUE ~ "ok")) -> merge1
