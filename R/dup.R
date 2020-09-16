@@ -66,4 +66,3 @@ dup <- function (path, study) {
   
   return (list)
 }
-dup("/Users/phoebelam/Desktop/clean", "OTR")
