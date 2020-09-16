@@ -8,9 +8,12 @@ sleeplog <- function(path, id, Study, visit) {
   # library(gtools)
   # library (lubridate)
   
-  #troubleshoot
-  # file <- read.csv("MHS/MHS V1 Daily Diary Day 1_August 19, 2020_16.42.csv", header = T)
+  # troubleshoot
+  # file <- read.csv("OTR/OTR V1 Daily Diary Day 1_September 10, 2020_19.20.csv", header = T)
   # day8check = 1
+  # id = 2871
+  # path = "/Users/phoebelam/Desktop/clean"
+  # Study = "OTR"
 
   setwd (path)
   log <- data.frame(matrix(ncol = 1, nrow = 1))
@@ -468,13 +471,17 @@ sleeplog <- function(path, id, Study, visit) {
                                                is.na(inbed.rowdiff)==TRUE & is.na(inbed.rowdiff2)==TRUE ~ NA_character_, 
                                                TRUE ~ "ok")) -> merge1
     
+    merge1 %>% select (id, day, qualtrics_day, rawcompdt, s_rep.shoulddt, binge) %>% View ()
+    
     #deciding on which binge version to keep
     merge1 %>%
       dplyr::mutate (qualtrics_day = as.numeric(as.character(qualtrics_day))) %>%
       dplyr::mutate (bingekeep = dplyr::case_when(binge == "binge" & qualtrics_day - 1 == day~ 1,
                                                   binge == "binge" & qualtrics_day - 1 != day ~ 0)) -> merge1
     
-    merge1 %>% dplyr::filter (bingekeep == 0) %>% dplyr::select (qualtrics_day) -> bingebaddays
+    
+    merge1 %>% select(id, day, s_rep.shoulddt, qualtrics_day, rawcompdt, actual, BedTime) %>% View ()
+    
     
     bingebaddays <- bingebaddays[,1]
     
