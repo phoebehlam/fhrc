@@ -451,13 +451,26 @@ sleeplog <- function(path, id, Study, visit) {
     merge1 <- merge (track, log, by = c("id", "match"), all=TRUE)
     
     #compliance alert
+    # merge1 %>%
+    #   dplyr::mutate (s_rep.shoulddt = as.POSIXct(s_rep.shoulddt, format="%Y-%m-%d %H:%M:%S"),
+    #                  rawcompdt= as.POSIXct(rawcompdt, format="%Y-%m-%d %H:%M:%S")) %>%
+    #   dplyr::mutate (s_rep_diff = difftime(rawcompdt, s_rep.shoulddt, units = "hours")) %>%
+    #   dplyr::mutate (sleep_compliance = dplyr::case_when (s_rep_diff < 16 ~ "ok",
+    #                                                       s_rep_diff >= 16 & s_rep_diff <= 24.99972 ~ "late:prob no good",
+    #                                                       s_rep_diff > 24.99972 ~ "way late:noncompliant",
+    #                                                       day == 8 ~ NA_character_,
+    #                                                       is.na(day)== TRUE ~ NA_character_,
+    #                                                       TRUE~ "missed")) -> merge1
+    
+    # new definition for lateness based on sept 2020 email exchanges with edith and lauren
+    # 9pm to 5am “ok”, 5am to noon “late: before noon”, noon-9pm “late: past noon”
     merge1 %>%
       dplyr::mutate (s_rep.shoulddt = as.POSIXct(s_rep.shoulddt, format="%Y-%m-%d %H:%M:%S"),
                      rawcompdt= as.POSIXct(rawcompdt, format="%Y-%m-%d %H:%M:%S")) %>%
       dplyr::mutate (s_rep_diff = difftime(rawcompdt, s_rep.shoulddt, units = "hours")) %>%
-      dplyr::mutate (sleep_compliance = dplyr::case_when (s_rep_diff < 16 ~ "ok",
-                                                          s_rep_diff >= 16 & s_rep_diff <= 24.99972 ~ "late:prob no good",
-                                                          s_rep_diff > 24.99972 ~ "way late:noncompliant",
+      dplyr::mutate (sleep_compliance = dplyr::case_when (s_rep_diff < 9 ~ "ok",
+                                                          s_rep_diff >= 9 & s_rep_diff < 16 ~ "late:before noon",
+                                                          s_rep_diff >= 16 ~ "late:past noon",
                                                           day == 8 ~ NA_character_,
                                                           is.na(day)== TRUE ~ NA_character_,
                                                           TRUE~ "missed")) -> merge1
@@ -471,18 +484,13 @@ sleeplog <- function(path, id, Study, visit) {
                                                is.na(inbed.rowdiff)==TRUE & is.na(inbed.rowdiff2)==TRUE ~ NA_character_, 
                                                TRUE ~ "ok")) -> merge1
     
-    merge1 %>% select (id, day, qualtrics_day, rawcompdt, s_rep.shoulddt, binge) %>% View ()
-    
     #deciding on which binge version to keep
     merge1 %>%
       dplyr::mutate (qualtrics_day = as.numeric(as.character(qualtrics_day))) %>%
       dplyr::mutate (bingekeep = dplyr::case_when(binge == "binge" & qualtrics_day - 1 == day~ 1,
                                                   binge == "binge" & qualtrics_day - 1 != day ~ 0)) -> merge1
     
-    
-    merge1 %>% select(id, day, s_rep.shoulddt, qualtrics_day, rawcompdt, actual, BedTime) %>% View ()
-    
-    
+    merge1 %>% filter (bingekeep == 0) %>% select (qualtrics_day) -> bingebaddays
     bingebaddays <- bingebaddays[,1]
     
     merge1 %>%
