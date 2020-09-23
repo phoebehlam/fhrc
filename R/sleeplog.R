@@ -490,7 +490,7 @@ sleeplog <- function(path, id, Study, visit) {
       dplyr::mutate (bingekeep = dplyr::case_when(binge == "binge" & qualtrics_day - 1 == day~ 1,
                                                   binge == "binge" & qualtrics_day - 1 != day ~ 0)) -> merge1
     
-    merge1 %>% filter (bingekeep == 0) %>% select (qualtrics_day) -> bingebaddays
+    merge1 %>% dplyr::filter (bingekeep == 0) %>% dplyr::select (qualtrics_day) -> bingebaddays
     bingebaddays <- bingebaddays[,1]
     
     merge1 %>%
