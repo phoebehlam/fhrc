@@ -349,7 +349,7 @@ sleeplog <- function(path, id, Study, visit) {
     track <- xlsx::read.xlsx (paste(path, "/MHS/MHS Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "Mentor V1")
     
     #MHS Mentor V2
-  }else if (Study == "MHS" & mhsid==1 & visit == 1 ) {
+  }else if (Study == "MHS" & mhsid==1 & visit == 2 ) {
     track <- xlsx::read.xlsx (paste(path, "/MHS/MHS Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "Mentor V2")
     
     #MHS Mentee V1
