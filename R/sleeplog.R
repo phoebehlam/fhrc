@@ -1,6 +1,6 @@
 #'@importFrom magrittr "%>%"
 #'@export
-sleeplog <- function(path, id, Study, visit) {
+sleeplog <- function(path, id, Study, visit, daylight = F) {
   
   # library (xlsx)
   # library(dplyr)
@@ -11,8 +11,8 @@ sleeplog <- function(path, id, Study, visit) {
   # troubleshoot
   # file <- read.csv("OTR/OTR V1 Daily Diary Day 1_September 10, 2020_19.20.csv", header = T)
   # day8check = 1
-  # id = 2871
-  # path = "/Users/phoebelam/Desktop/clean"
+  # id = 3081
+  # path = "/Users/phoebelam/Desktop/Sleep"
   # Study = "OTR"
 
   setwd (path)
@@ -21,9 +21,9 @@ sleeplog <- function(path, id, Study, visit) {
   xlsx::write.xlsx(log, "sleeplog.xlsx", row.names = FALSE)
   xlsx::write.xlsx(other, "otherlog.xlsx", row.names = FALSE)
   
-  filenames = intersect(list.files(path = path, pattern = Study, full.names = TRUE, recursive = TRUE), 
-                        list.files(path = path, pattern = ".csv", full.names = TRUE, recursive = TRUE))
-  
+  filenames = intersect(intersect(list.files(path = path, pattern = Study, full.names = TRUE, recursive = TRUE), 
+                        list.files(path = path, pattern = ".csv", full.names = TRUE, recursive = TRUE)),
+                        list.files(path = path, pattern = paste("V", visit, sep=""), full.names = TRUE, recursive = TRUE))
   
   for (f in filenames) { # do not run this line when we troubleshooting
     print (f)
@@ -423,7 +423,6 @@ sleeplog <- function(path, id, Study, visit) {
   #check whether there are any entries at all
   log <- xlsx::read.xlsx2 ("sleeplog.xlsx", sheetIndex = 1, startRow=1) [-1,-1]
   
-  
   if (nrow (log) > 0) {
     
     #add weekday and then dplyr::rename ID to id to match other sheets
@@ -520,7 +519,7 @@ sleeplog <- function(path, id, Study, visit) {
                                                   TRUE~ as.character(med_text))) %>%
       dplyr::mutate (duration_sum_human = duration_sum) %>%
       dplyr::rename (date = match,
-              weekday = should.wd) %>%
+                     weekday = should.wd) %>%
       dplyr::mutate (day = dplyr::case_when(is.na(day)==FALSE~ paste("day", day, sep = " "),
                                             is.na(day)==TRUE~ "day extra")) %>%
       dplyr::select (id, day, date, weekday, sleep_compliance, BedTime, WakeTime, NumRemove:duration_sum, duration_sum_human, nap:med_text) %>%
@@ -528,6 +527,227 @@ sleeplog <- function(path, id, Study, visit) {
                                              TRUE~ as.character(day)),
                      weekday = dplyr::case_when (is.na(weekday)==TRUE~ "extra",
                                                  TRUE~ as.character(weekday))) -> merge2
+    
+    # for folks who been through daylight savings
+    if (daylight == T) {
+      
+      #grab year
+      year<- as.numeric(substr(as.Date(merge2$date)[1], 0, 4))
+      
+      # for bedtime
+      # obsolete, using the other method (creates less auxillary variables)
+      # merge2 %>%
+      #   tidyr::separate(BedTime, c("bedhour", "bednothour") , sep = ":", remove = F) %>%
+      #   tidyr::separate(bednothour, c("bedmin", "ampm") , sep = "   ") %>%
+      #   mutate (beddl = case_when(is.na(BedTime)==F & year == 2020 & date == as.Date("2020-10-31") & 
+      #                                 (ampm == "PM" | ampm== "AM" & as.numeric(bedhour)>2)~ 1,
+      #                               is.na(BedTime)==F & year == 2019 & date == as.Date("2020-11-03") & 
+      #                                 (ampm == "PM" | ampm== "AM" & as.numeric(bedhour)>2)~ 1,
+      #                               is.na(BedTime)==F & year == 2020 & date > as.Date("2020-10-31")~ 1, 
+      #                               is.na(BedTime)==F & year == 2019 & date > as.Date("2020-11-03")~ 1, 
+      #                              TRUE~ 0)) -> merge2
+
+      merge2 %>%
+        mutate (beddl = case_when(is.na(BedTime)==F & year == 2022 & date == as.Date("2021-11-06") & 
+                                    (lubridate::pm(strptime(BedTime, "%I : %M   %p")) == TRUE | 
+                                       lubridate::am(strptime(BedTime, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(BedTime, "%I : %M   %p"))>=2)~ 1,
+                                  is.na(BedTime)==F & year == 2021 & date == as.Date("2021-11-07") & 
+                                    (lubridate::pm(strptime(BedTime, "%I : %M   %p")) == TRUE | 
+                                       lubridate::am(strptime(BedTime, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(BedTime, "%I : %M   %p"))>=2)~ 1,
+                                  is.na(BedTime)==F & year == 2020 & date == as.Date("2020-10-31") & 
+                                     (lubridate::pm(strptime(BedTime, "%I : %M   %p")) == TRUE | 
+                                        lubridate::am(strptime(BedTime, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(BedTime, "%I : %M   %p"))>=2)~ 1,
+                                   is.na(BedTime)==F & year == 2019 & date == as.Date("2019-11-03") & 
+                                     (lubridate::pm(strptime(BedTime, "%I : %M   %p")) == TRUE | 
+                                        lubridate::am(strptime(BedTime, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(BedTime, "%I : %M   %p"))>=2)~ 1,
+                                  is.na(BedTime)==F & year == 2018 & date == as.Date("2018-11-04") & 
+                                    (lubridate::pm(strptime(BedTime, "%I : %M   %p")) == TRUE | 
+                                       lubridate::am(strptime(BedTime, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(BedTime, "%I : %M   %p"))>=2)~ 1,
+                                  is.na(BedTime)==F & year == 2022 & date > as.Date("2021-11-06")~ 1, 
+                                  is.na(BedTime)==F & year == 2021 & date > as.Date("2021-11-07")~ 1, 
+                                  is.na(BedTime)==F & year == 2020 & date > as.Date("2020-10-31")~ 1, 
+                                  is.na(BedTime)==F & year == 2019 & date > as.Date("2019-11-03")~ 1,
+                                  is.na(BedTime)==F & year == 2018 & date > as.Date("2018-11-04")~ 1,
+                                  TRUE~ 0)) -> merge2
+      
+      # for waketime
+      # merge2 %>%
+      #   tidyr::separate(WakeTime, c("wakehour", "wakenothour") , sep = ":", remove = F) %>%
+      #   tidyr::separate(wakenothour, c("wakemin", "wakeampm") , sep = "   ") %>%
+      #   mutate (wakedl = case_when(is.na(WakeTime)==F & year == 2020 & date == as.Date("2020-10-31") & 
+      #                            (ampm == "PM" | ampm== "AM" & as.numeric(wakehour)>2)~ 1,
+      #                          is.na(WakeTime)==F & year == 2019 & date == as.Date("2020-11-03") & 
+      #                            (ampm == "PM" | ampm== "AM" & as.numeric(wakehour)>2)~ 1,
+      #                          is.na(WakeTime)==F & year == 2020 & date > as.Date("2020-10-31")~ 1, 
+      #                          is.na(WakeTime)==F & year == 2019 & date > as.Date("2020-11-03")~ 1, 
+      #                          TRUE~ 0)) -> merge2
+      
+      merge2 %>%
+        mutate (wakedl = case_when(is.na(WakeTime)==F & year == 2020 & date == as.Date("2020-10-31") & 
+                                     (lubridate::pm(strptime(WakeTime, "%I : %M   %p")) == TRUE | 
+                                        lubridate::am(strptime(WakeTime, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(WakeTime, "%I : %M   %p"))>=2)~ 1,
+                                   is.na(WakeTime)==F & year == 2019 & date == as.Date("2020-11-03") & 
+                                     (lubridate::pm(strptime(WakeTime, "%I : %M   %p")) == TRUE | 
+                                        lubridate::am(strptime(WakeTime, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(WakeTime, "%I : %M   %p"))>=2)~ 1,
+                                   is.na(WakeTime)==F & year == 2020 & date > as.Date("2020-10-31")~ 1, 
+                                   is.na(WakeTime)==F & year == 2019 & date > as.Date("2020-11-03")~ 1,
+                                   TRUE~ 0)) -> merge2
+      
+      # for remove
+      merge2 %>%
+        mutate (Remove1dl = case_when(as.character(Remove1) == " :    " | is.na(Remove1)==T~0,
+                                      is.na(Remove1)==F & year == 2020 & date == as.Date("2020-11-01") & 
+                                        (lubridate::pm(strptime(Remove1, "%I : %M   %p")) == TRUE | 
+                                           lubridate::am(strptime(Remove1, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(Remove1, "%I : %M   %p"))>=2)~ 1,
+                                      is.na(Remove1)==F & year == 2019 & date == as.Date("2020-11-03") & 
+                                        (lubridate::pm(strptime(Remove1, "%I : %M   %p")) == TRUE | 
+                                           lubridate::am(strptime(Remove1, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(Remove1, "%I : %M   %p"))>=2)~ 1,
+                                      is.na(Remove1)==F & year == 2020 & date > as.Date("2020-11-01")~ 1, 
+                                      is.na(Remove1)==F & year == 2019 & date > as.Date("2020-11-03")~ 1,
+                                      TRUE~ 0)) -> merge2
+      
+      merge2 %>%
+        mutate (Remove2dl = case_when(as.character(Remove2) == " :    " | is.na(Remove2)==T~0,
+                                      is.na(Remove2)==F & year == 2020 & date == as.Date("2020-11-01") & 
+                                        (lubridate::pm(strptime(Remove2, "%I : %M   %p")) == TRUE | 
+                                           lubridate::am(strptime(Remove2, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(Remove2, "%I : %M   %p"))>=2)~ 1,
+                                      is.na(Remove2)==F & year == 2019 & date == as.Date("2020-11-03") & 
+                                        (lubridate::pm(strptime(Remove2, "%I : %M   %p")) == TRUE | 
+                                           lubridate::am(strptime(Remove2, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(Remove2, "%I : %M   %p"))>=2)~ 1,
+                                      is.na(Remove2)==F & year == 2020 & date > as.Date("2020-11-01")~ 1, 
+                                      is.na(Remove2)==F & year == 2019 & date > as.Date("2020-11-03")~ 1,
+                                      TRUE~ 0)) -> merge2
+      
+      merge2 %>%
+        mutate (Remove3dl = case_when(as.character(Remove3) == " :    " | is.na(Remove3)==T~0,
+                                      is.na(Remove3)==F & year == 2020 & date == as.Date("2020-11-01") & 
+                                        (lubridate::pm(strptime(Remove3, "%I : %M   %p")) == TRUE | 
+                                           lubridate::am(strptime(Remove3, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(Remove3, "%I : %M   %p"))>=2)~ 1,
+                                      is.na(Remove3)==F & year == 2019 & date == as.Date("2020-11-03") & 
+                                        (lubridate::pm(strptime(Remove3, "%I : %M   %p")) == TRUE | 
+                                           lubridate::am(strptime(Remove3, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(Remove3, "%I : %M   %p"))>=2)~ 1,
+                                      is.na(Remove3)==F & year == 2020 & date > as.Date("2020-11-01")~ 1, 
+                                      is.na(Remove3)==F & year == 2019 & date > as.Date("2020-11-03")~ 1,
+                                      TRUE~ 0)) -> merge2
+      
+      merge2 %>%
+        mutate (Remove4dl = case_when(as.character(Remove4) == " :    " | is.na(Remove4)==T~0,
+                                      is.na(Remove4)==F & year == 2020 & date == as.Date("2020-11-01") & 
+                                        (lubridate::pm(strptime(Remove4, "%I : %M   %p")) == TRUE | 
+                                           lubridate::am(strptime(Remove4, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(Remove4, "%I : %M   %p"))>=2)~ 1,
+                                      is.na(Remove4)==F & year == 2019 & date == as.Date("2020-11-03") & 
+                                        (lubridate::pm(strptime(Remove4, "%I : %M   %p")) == TRUE | 
+                                           lubridate::am(strptime(Remove4, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(Remove4, "%I : %M   %p"))>=2)~ 1,
+                                      is.na(Remove4)==F & year == 2020 & date > as.Date("2020-11-01")~ 1, 
+                                      is.na(Remove4)==F & year == 2019 & date > as.Date("2020-11-03")~ 1,
+                                      TRUE~ 0)) -> merge2
+      
+      # for puton
+      merge2 %>%
+        mutate (PutOn1dl = case_when(as.character(PutOn1) == " :    " | is.na(PutOn1)==T~0,
+                                     is.na(PutOn1)==F & year == 2020 & date == as.Date("2020-11-01") & 
+                                       (lubridate::pm(strptime(PutOn1, "%I : %M   %p")) == TRUE | 
+                                          lubridate::am(strptime(PutOn1, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(PutOn1, "%I : %M   %p"))>=2)~ 1,
+                                     is.na(PutOn1)==F & year == 2019 & date == as.Date("2020-11-03") & 
+                                       (lubridate::pm(strptime(PutOn1, "%I : %M   %p")) == TRUE | 
+                                          lubridate::am(strptime(PutOn1, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(PutOn1, "%I : %M   %p"))>=2)~ 1,
+                                     is.na(PutOn1)==F & year == 2020 & date > as.Date("2020-11-01")~ 1, 
+                                     is.na(PutOn1)==F & year == 2019 & date > as.Date("2020-11-03")~ 1,
+                                     TRUE~ 0)) -> merge2
+      
+      merge2 %>%
+        mutate (PutOn2dl = case_when(as.character(PutOn2) == " :    " | is.na(PutOn2)==T~0,
+                                     is.na(PutOn2)==F & year == 2020 & date == as.Date("2020-11-01") & 
+                                       (lubridate::pm(strptime(PutOn2, "%I : %M   %p")) == TRUE | 
+                                          lubridate::am(strptime(PutOn2, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(PutOn2, "%I : %M   %p"))>=2)~ 1,
+                                     is.na(PutOn2)==F & year == 2019 & date == as.Date("2020-11-03") & 
+                                       (lubridate::pm(strptime(PutOn2, "%I : %M   %p")) == TRUE | 
+                                          lubridate::am(strptime(PutOn2, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(PutOn2, "%I : %M   %p"))>=2)~ 1,
+                                     is.na(PutOn2)==F & year == 2020 & date > as.Date("2020-11-01")~ 1, 
+                                     is.na(PutOn2)==F & year == 2019 & date > as.Date("2020-11-03")~ 1,
+                                     TRUE~ 0)) -> merge2
+      
+      merge2 %>%
+        mutate (PutOn3dl = case_when(as.character(PutOn3) == " :    " | is.na(PutOn3)==T~0,
+                                     is.na(PutOn3)==F & year == 2020 & date == as.Date("2020-11-01") & 
+                                       (lubridate::pm(strptime(PutOn3, "%I : %M   %p")) == TRUE | 
+                                          lubridate::am(strptime(PutOn3, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(PutOn3, "%I : %M   %p"))>=2)~ 1,
+                                     is.na(PutOn3)==F & year == 2019 & date == as.Date("2020-11-03") & 
+                                       (lubridate::pm(strptime(PutOn3, "%I : %M   %p")) == TRUE | 
+                                          lubridate::am(strptime(PutOn3, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(PutOn3, "%I : %M   %p"))>=2)~ 1,
+                                     is.na(PutOn3)==F & year == 2020 & date > as.Date("2020-11-01")~ 1, 
+                                     is.na(PutOn3)==F & year == 2019 & date > as.Date("2020-11-03")~ 1,
+                                     TRUE~ 0)) -> merge2
+      
+      merge2 %>%
+        mutate (PutOn4dl = case_when(as.character(PutOn4) == " :    " | is.na(PutOn4)==T~0,
+                                     is.na(PutOn4)==F & year == 2020 & date == as.Date("2020-11-01") & 
+                                       (lubridate::pm(strptime(PutOn4, "%I : %M   %p")) == TRUE | 
+                                          lubridate::am(strptime(PutOn4, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(PutOn4, "%I : %M   %p"))>=2)~ 1,
+                                     is.na(PutOn4)==F & year == 2019 & date == as.Date("2020-11-03") & 
+                                       (lubridate::pm(strptime(PutOn4, "%I : %M   %p")) == TRUE | 
+                                          lubridate::am(strptime(PutOn4, "%I : %M   %p"))== TRUE & lubridate::hour(strptime(PutOn4, "%I : %M   %p"))>=2)~ 1,
+                                     is.na(PutOn4)==F & year == 2020 & date > as.Date("2020-11-01")~ 1, 
+                                     is.na(PutOn4)==F & year == 2019 & date > as.Date("2020-11-03")~ 1,
+                                     TRUE~ 0)) -> merge2
+      
+      # now add one for tagged ones (DO THE SAME FOR REMOVE AND PUT ON)
+      merge2 %>%
+        mutate (bed_adjdl = case_when(beddl == 1~ strptime(BedTime, "%I : %M   %p") + lubridate::hours(1),
+                                      beddl == 0~ strptime(BedTime, "%I : %M   %p")),
+                wake_adjdl = case_when(wakedl == 1~ strptime(WakeTime, "%I : %M   %p") + lubridate::hours(1),
+                                       wakedl == 0~ strptime(WakeTime, "%I : %M   %p")),
+                re1_adjdl = case_when(Remove1dl == 1~ strptime(Remove1, "%I : %M   %p") + lubridate::hours(1),
+                                      Remove1dl == 0~ strptime(Remove1, "%I : %M   %p")),
+                re2_adjdl = case_when(Remove2dl == 1~ strptime(Remove2, "%I : %M   %p") + lubridate::hours(1),
+                                      Remove2dl == 0~ strptime(Remove2, "%I : %M   %p")),
+                re3_adjdl = case_when(Remove3dl == 1~ strptime(Remove3, "%I : %M   %p") + lubridate::hours(1),
+                                      Remove3dl == 0~ strptime(Remove3, "%I : %M   %p")),
+                re4_adjdl = case_when(Remove4dl == 1~ strptime(Remove4, "%I : %M   %p") + lubridate::hours(1),
+                                      Remove4dl == 0~ strptime(Remove4, "%I : %M   %p")),
+                po1_adjdl = case_when(PutOn1dl == 1~ strptime(PutOn1, "%I : %M   %p") + lubridate::hours(1),
+                                      PutOn1dl == 0~ strptime(PutOn1, "%I : %M   %p")),
+                po2_adjdl = case_when(PutOn2dl == 1~ strptime(PutOn2, "%I : %M   %p") + lubridate::hours(1),
+                                      PutOn2dl == 0~ strptime(PutOn2, "%I : %M   %p")),
+                po3_adjdl = case_when(PutOn3dl == 1~ strptime(PutOn3, "%I : %M   %p") + lubridate::hours(1),
+                                      PutOn3dl == 0~ strptime(PutOn3, "%I : %M   %p")),
+                po4_adjdl = case_when(PutOn4dl == 1~ strptime(PutOn4, "%I : %M   %p") + lubridate::hours(1),
+                                      PutOn4dl == 0~ strptime(PutOn4, "%I : %M   %p"))) %>%
+        mutate (bed_adjdl_char = strftime(bed_adjdl, "%I : %M   %p"),
+                wake_adjdl_char = strftime(wake_adjdl, "%I : %M   %p"),
+                re1_adjdl_char = strftime(re1_adjdl, "%I : %M   %p"),
+                re2_adjdl_char = strftime(re2_adjdl, "%I : %M   %p"),
+                re3_adjdl_char = strftime(re3_adjdl, "%I : %M   %p"),
+                re4_adjdl_char = strftime(re4_adjdl, "%I : %M   %p"),
+                po1_adjdl_char = strftime(po1_adjdl, "%I : %M   %p"),
+                po2_adjdl_char = strftime(po2_adjdl, "%I : %M   %p"),
+                po3_adjdl_char = strftime(po3_adjdl, "%I : %M   %p"),
+                po4_adjdl_char = strftime(po4_adjdl, "%I : %M   %p")) -> merge2
+
+      
+      
+      #rename the adj as bedtime and waketime and remove auxillary columns
+      merge2 %>%
+        mutate(BedTime = bed_adjdl_char,
+               WakeTime = wake_adjdl_char,
+               Remove1 = re1_adjdl_char,
+               Remove2 = re2_adjdl_char,
+               Remove3 = re3_adjdl_char,
+               Remove4 = re4_adjdl_char,
+               PutOn1 = po1_adjdl_char,
+               PutOn2 = po2_adjdl_char,
+               PutOn3 = po3_adjdl_char,
+               PutOn4 = po4_adjdl_char) -> merge2
+      merge2 %>%
+        select (id:med_text, beddl, wakedl, Remove1dl, PutOn1dl,
+                Remove2dl, PutOn2dl, Remove3dl, PutOn3dl,
+                Remove4dl, PutOn4dl) -> merge2
+  
+      
+      
+      
+
+    }
     
     tmerge2 <- t(merge2)
     
@@ -544,4 +764,10 @@ sleeplog <- function(path, id, Study, visit) {
 }
 
 
-
+library(dplyr)
+path = "/Users/phoebelam/Desktop/Sleep"
+Study = "OTR"
+visit = 1
+daylight = T
+sleeplog(path, 1551, Study, 2, daylight = F)
+sleeplog(path, 1781, Study, 2, daylight = F)
