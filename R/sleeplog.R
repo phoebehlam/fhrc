@@ -646,11 +646,3 @@ sleeplog <- function(path, id, Study, visit, daylight = F) {
   
 }     
 
-# 
-# library(dplyr)
-# path = "/Users/phoebelam/Desktop/Sleep"
-# Study = "OTR"
-# visit = 1
-# daylight = T
-# sleeplog(path, 1461, Study, 2, daylight = T)
-
