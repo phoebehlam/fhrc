@@ -29,7 +29,7 @@ mhs.importclean <- function(path, importid, new){
               list(~tolower(.))) %>%
     dplyr::mutate_at(dplyr::vars(birthday, dateSignedConsentForm),
               list(~as.character(.))) %>%
-    dplyr::mutate(importType = dplyr::case_when(row_number()==1~ importid)) %>%
+    dplyr::mutate(importType = dplyr::case_when(dplyr::row_number()==1~ importid)) %>%
     dplyr::mutate_at(dplyr::vars(race, ethnicity,statusId,cv.school),
               list(~gsub("/| / | |-|\\.", "_", .)))-> dat
   
