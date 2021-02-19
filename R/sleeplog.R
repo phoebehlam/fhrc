@@ -3,11 +3,12 @@
 sleeplog <- function(path, id, Study, visit, daylight = F) {
 
   # troubleshoot
-  # file <- read.csv("OTR/OTR V1 Daily Diary Day 1_September 10, 2020_19.20.csv", header = T)
-  # day8check = 1
-  # id = 3081
-  # path = "/Users/phoebelam/Desktop/Sleep"
-  # Study = "OTR"
+  file <- read.csv("OTR/OTR V1 Daily Diary Day 1_September 10, 2020_19.20.csv", header = T)
+  day8check = 1
+  id = 3211
+  path = "/Users/phoebelam/Desktop/Sleep"
+  Study = "OTR"
+  visit = 1
 
   setwd (path)
   log <- data.frame(matrix(ncol = 1, nrow = 1))
