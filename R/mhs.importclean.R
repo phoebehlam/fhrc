@@ -7,7 +7,9 @@
 #' @param importid in quotes, ripple -> site admin -> import -> under "download template" select the new study v2 study -> select "template" -> scroll to all the way to the right, you can find the import id under the column "importType"
 #' 
 #' @examples 
-#' mhs.importclean (path = "/Users/phoebelam/Desktop/ripple v1 to v2 migrate/c2021_v1_export.csv", new = "/Users/phoebelam/Desktop/ripple v1 to v2 migrate/c2021_v2_import.xlsx", importid = "aDTL2wkzBmMEXsL4u")
+#' mhs.importclean (path = "/Users/phoebelam/Desktop/ripple v1 to v2 migrate/c2021_v1_export.csv", 
+#' new = "/Users/phoebelam/Desktop/ripple v1 to v2 migrate/c2021_v2_import.xlsx", 
+#' importid = "aDTL2wkzBmMEXsL4u")
 #'  
 #'@importFrom magrittr "%>%"
 #'@export

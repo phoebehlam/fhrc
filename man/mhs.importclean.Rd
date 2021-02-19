@@ -17,6 +17,8 @@ mhs.importclean(path, importid, new)
 takes a ripple-exported v1 .csv file and turn it into a cleaned .xlsx import
 }
 \examples{
-mhs.importclean (path = "/Users/phoebelam/Desktop/ripple v1 to v2 migrate/c2021_v1_export.csv", new = "/Users/phoebelam/Desktop/ripple v1 to v2 migrate/c2021_v2_import.xlsx", importid = "aDTL2wkzBmMEXsL4u")
+mhs.importclean (path = "/Users/phoebelam/Desktop/ripple v1 to v2 migrate/c2021_v1_export.csv", 
+new = "/Users/phoebelam/Desktop/ripple v1 to v2 migrate/c2021_v2_import.xlsx", 
+importid = "aDTL2wkzBmMEXsL4u")
  
 }
