@@ -1,5 +1,8 @@
+#'report aggregated summary on binged diary entries (for otr or mhs)
+#'
 #'@importFrom magrittr "%>%"
 #'
+#'@examples binge("/Users/phoebelam/Desktop/clean", "MHS", 1, 2023)
 #'
 #'@export
 binge <- function (path, study, visit, remove) {
@@ -1397,12 +1400,4 @@ binge <- function (path, study, visit, remove) {
   
 }
 
-binge("/Users/phoebelam/Desktop/clean",
-      "MHS",
-      1,
-      2023)
 
-binge("/Users/phoebelam/Desktop/clean",
-      "MHS",
-      2,
-      2023)

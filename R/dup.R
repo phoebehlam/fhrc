@@ -1,3 +1,5 @@
+#'report entries with duplicated entries
+#'
 #'@importFrom magrittr "%>%"
 #'
 #'@examples dup("/Users/phoebelam/Desktop/clean", "MHS")
