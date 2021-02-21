@@ -1399,5 +1399,3 @@ binge <- function (path, study, visit, remove) {
              " entries will be excluded.", sep ="")))
   
 }
-
-
