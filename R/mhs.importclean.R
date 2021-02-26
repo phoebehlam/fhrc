@@ -15,20 +15,25 @@
 #'@export
 mhs.importclean <- function(path, importid, new){
   dat <- read.csv(path)
+  dat <-read.csv("/Users/phoebelam/Desktop/import.csv")
   
   dat %>%
     dplyr::filter(!statusId %in% c("MHS Refused to Enroll",
-                            "Need to Schedule/ Reschedule- Mentee",
-                            "V1 Complete-Mentor-Dropped Out of Cities")) -> dat
+                            "Need to Schedule/ Reschedule- Mentee")) -> dat
   
   dat %>%
     dplyr::mutate_at(dplyr::vars(sex, race, ethnicity, statusId, cv.v1_difficult_blood_draw_, 
                    cv.registered_with_cities_,
-                   cv.mentor_or_mentee_, cv.transportation, cv.dropped_cities_after_v1_, 
-                   cv.food_allergies, cv.condition, cv.staff_that_ran_visit,cv.school),
+                   cv.mentor_or_mentee_, cv.dropped_cities_after_v1_, 
+                   cv.food_allergies, cv.condition,cv.school),
               list(~tolower(.))) %>%
     dplyr::mutate_at(dplyr::vars(birthday, dateSignedConsentForm),
               list(~as.character(.))) %>%
+    dplyr::mutate(cv.transportation_notes = NA_character_,
+                  cv.transportation = NA_character_,
+                  cv.where_to_send_payments = NA_character_,
+                  cv.where_to_send_feedback = NA_character_,
+                  cv.staff_that_ran_visit = NA_character_) %>%
     dplyr::mutate(importType = dplyr::case_when(dplyr::row_number()==1~ importid)) %>%
     dplyr::mutate_at(dplyr::vars(race, ethnicity,statusId,cv.school),
               list(~gsub("/| / | |-|\\.", "_", .)))-> dat
