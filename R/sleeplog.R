@@ -320,7 +320,7 @@ sleeplog <- function(path, id, Study, visit, daylight = F) {
     
     #OTRV2
   }else if (Study == "OTR" & visit == 2)  {
-    track <- xlsx::read.xlsx (paste(path, "/OTR/OTR DRI Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "V2 Actigraphy")
+    track <- openxlsx::read.xlsx (paste(path, "/OTR/OTR DRI Actigraphy Tracking.xlsx", sep=""), startRow = 3, sheet = "V2 Actigraphy", detectDates = T)
     
     #MHS Mentor V1  
   }else if (Study == "MHS" & mhsid==1 & visit == 1 ) {
@@ -340,8 +340,9 @@ sleeplog <- function(path, id, Study, visit, daylight = F) {
   }
   
   track %>%
-    dplyr::rename (should0 = Lab.Visit.Date,
-                   dd1log = DD.Day.1..Night.) %>%
+    dplyr::rename (should0 = Lab.Visit.Date) %>%
+    dplyr::rename_at (dplyr::vars(dplyr::contains("DD.Day.1.", ignore.case = T)),
+                      list(~"dd1log")) %>%
     dplyr::filter (ID == id) -> track
   
   if (track$should0+1 == track$dd1log) {
