@@ -1,0 +1,82 @@
+#' consolidate luminex output for mhs only
+#'
+#' consolidate mfi and cv from individual outputs
+#' 
+#' @param path the folder to which all the individual files are saved
+#' @examples
+#' mhs.luminex (path= "/Users/phoebelam/Box/FHRC/Mentoring & Health Study (MHS)/Wet Lab/Immunoassays/Luminex/Cohort 1 Data")
+#'
+#' 
+#' @importFrom magrittr "%>%"
+#' @export
+mhs.luminex <- function(path) {
+  
+  filenames = list.files(path=path, pattern = ".xlsx" ,full.names= TRUE, recursive=FALSE)
+  
+  consol <- data.frame(matrix(ncol = 1, nrow = 1))
+  saveRDS(consol, paste(path,"/consolidated.RDS", sep=""))
+  
+  for (f in filenames) {
+    
+    print(f)
+    
+    # dilution factor
+    # dil <- xlsx::read.xlsx("/Users/phoebelam/Desktop/mhs/MHS Cohort 1 102-117 V1 102-115 V2_20200303_142229_TABS.xlsx",
+    #                        sheetName = "Raw Data")
+
+    dil <- xlsx::read.xlsx(f, sheetName = "Raw Data")
+    which(dil$NA. == "Dilution Factor")+1 -> start
+    which(dil$xPONENT=="Analysis Types")-1 -> end
+    dil[start:end,] %>%
+      dplyr::select(xPONENT, NA.) %>%
+      dplyr::rename(Sample = xPONENT,
+                    dilution = NA.) %>%
+      dplyr::distinct(Sample, .keep_all = T) %>%
+      dplyr::filter(!(grepl("Standard|Background|CNTR|CTR|TM|EMPTY", Sample)==T))-> dil
+    
+    # cv
+    cvdat <- xlsx::read.xlsx("/Users/phoebelam/Desktop/mhs/MHS Cohort 1 102-117 V1 102-115 V2_20200303_142229_TABS.xlsx",,
+                             sheetName = "%CV Replicates", startRow = 2)
+    
+    cvdat <- xlsx::read.xlsx(f, sheetName = "%CV Replicates",startRow = 2)
+    cvdat %>%
+      dplyr::select(Sample,IL.8,IL.1b,IL.6,TNF.a) %>%
+      dplyr::rename (il8.cv = IL.8,
+                     il1b.cv = IL.1b,
+                     il6.cv = IL.6,
+                     tnfa.cv = TNF.a) %>%
+      dplyr::select(Sample, il8.cv, il1b.cv, il6.cv, tnfa.cv) %>% 
+      dplyr::mutate(filename.cv=basename(f)) %>%
+      dplyr::filter(!(grepl("Standard|CTR|EMPTY", Sample)==T) & is.na(Sample)==F) -> cvdat
+    
+    # mfi values
+    # mfidat <- xlsx::read.xlsx("/Users/phoebelam/Desktop/mhs/MHS Cohort 1 102-117 V1 102-115 V2_20200303_142229_TABS.xlsx",
+    #                           sheetName = "Avg Net MFI", startRow = 2)
+
+    mfidat <- xlsx::read.xlsx(f, sheetName = "Avg Net MFI",startRow = 2)
+    mfidat %>%
+      dplyr::select(Sample:TNF.a) %>%
+      dplyr::filter(is.na(Sample) == FALSE & grepl("Standard", Sample)==F) %>% 
+      dplyr::select(Sample, IL.8,IL.1b,IL.6,TNF.a) %>%
+      dplyr::rename(il8 = IL.8,
+                    il1b = IL.1b,
+                    il6 = IL.6,
+                    tnfa = TNF.a) %>% 
+      dplyr::mutate(filename.mfi=basename(f)) %>%
+      dplyr::filter(!(grepl("Standard|CTR|EMPTY", Sample)==T) & is.na(Sample)==F) ->mfidat
+    
+    #merge
+    pecan::mergethem(mfidat, cvdat, dil) -> together
+    
+    consol <- readRDS(paste(path,"/consolidated.RDS", sep=""))
+    consol <- gtools::smartbind(consol,together)
+    saveRDS(consol, paste(path,"/consolidated.RDS", sep=""))
+
+  }
+  
+  write.csv(consol, paste(path, "/mhs_long_", Sys.Date(), ".csv", sep=""), row.names=F, na="")
+  
+  
+
+}
+
