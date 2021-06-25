@@ -41,6 +41,7 @@ sleeplog <- function(path, id, Study, visit, daylight = F) {
         gsub ("OTR V1 Daily Diary Day ", "", .) %>%
         gsub ("OTR V2 Daily Diary Day ", "", .) %>%
         gsub ("V2 OTR Daily Diary Day ", "", .) %>%
+        gsub ("V3 OTR Daily Diary Day ", "", .) %>%
         gsub ("OTR Daily Diary Day ", "", .) %>%
         gsub ("MHS V1 Daily Diary Day ", "", .) %>%
         gsub ("MHS V2 Daily Diary Day ", "", .) %>%
@@ -314,14 +315,17 @@ sleeplog <- function(path, id, Study, visit, daylight = F) {
   
   substr(id, 0, 1) -> mhsid #1 = mentors, 2= mentees
   
-  #OTRV1
+  #otrv1
   if (Study == "OTR" & visit == 1)  {
     track <- xlsx::read.xlsx (paste(path, "/OTR/OTR DRI Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "V1 Actigraphy")
     
-    #OTRV2
+    #otrv2
   }else if (Study == "OTR" & visit == 2)  {
     track <- openxlsx::read.xlsx (paste(path, "/OTR/OTR DRI Actigraphy Tracking.xlsx", sep=""), startRow = 3, sheet = "V2 Actigraphy", detectDates = T)
     
+    #otrv3
+  }else if (Study == "OTR" & visit == 3){
+    track <- openxlsx::read.xlsx (paste(path, "/OTR/OTR DRI Actigraphy Tracking.xlsx", sep=""), startRow = 3, sheet = "V3 Actigraphy", detectDates = T)
     #MHS Mentor V1  
   }else if (Study == "MHS" & mhsid==1 & visit == 1 ) {
     track <- xlsx::read.xlsx (paste(path, "/MHS/MHS Actigraphy Tracking.xlsx", sep=""), startRow = 3, header = TRUE, sheetName = "Mentor V1")
