@@ -666,4 +666,3 @@ sleeplog <- function(path, id, Study, visit, daylight = F) {
   
   
 }     
-
