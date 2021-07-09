@@ -6,7 +6,7 @@ sleeplog <- function(path, id, Study, visit, daylight = F) {
   # file <- read.csv("OTR/OTR V1 Daily Diary Day 1_September 10, 2020_19.20.csv", header = T)
   # day8check = 1
   # id = 3211
-  # path = "/Users/phoebelam/Desktop/Sleep"
+  # path = "/Users/phoebelam/Desktop/sleep"
   # Study = "OTR"
   # visit = 1
 
@@ -490,26 +490,41 @@ sleeplog <- function(path, id, Study, visit, daylight = F) {
     
     #merge together
     merge2 <- merge (merge1, other, by = c("id", "match"), all=TRUE)
-    
-    merge2 %>%
-      dplyr::mutate (nap = dplyr::case_when (nap == "ERROR"~ NA_character_,
-                                             TRUE~ as.character(nap)), 
-                     sick = dplyr::case_when (sick == "ERROR"~ NA_character_,
-                                              TRUE~ as.character(sick)),
-                     med = dplyr::case_when (med == "ERROR"~ NA_character_,
-                                             TRUE~ as.character(med)),
-                     med_text = dplyr::case_when (med_text == "ERROR"~ NA_character_,
-                                                  TRUE~ as.character(med_text))) %>%
-      dplyr::mutate (duration_sum_human = duration_sum) %>%
-      dplyr::rename (date = match,
-                     weekday = should.wd) %>%
-      dplyr::mutate (day = dplyr::case_when(is.na(day)==FALSE~ paste("day", day, sep = " "),
-                                            is.na(day)==TRUE~ "day extra")) %>%
-      dplyr::select (id, day, date, weekday, sleep_compliance, BedTime, WakeTime, NumRemove:duration_sum, duration_sum_human, nap:med_text) %>%
-      dplyr::mutate (day = dplyr::case_when (is.na(day)==TRUE~ "extra",
-                                             TRUE~ as.character(day)),
-                     weekday = dplyr::case_when (is.na(weekday)==TRUE~ "extra",
-                                                 TRUE~ as.character(weekday))) -> merge2
+  
+    if(length(which(!is.na(merge2$qualtrics_day.x))) & which(!is.na(merge2$qualtrics_day.x)) ==8) {
+      merge2 %>%
+        dplyr::mutate (duration_sum_human = duration_sum) %>%
+        dplyr::rename (date = match,
+                       weekday = should.wd) %>%
+        dplyr::mutate (day = dplyr::case_when(is.na(day)==FALSE~ paste("day", day, sep = " "),
+                                              is.na(day)==TRUE~ "day extra")) %>%
+        dplyr::select (id, day, date, weekday, sleep_compliance, BedTime, WakeTime, NumRemove:duration_sum, duration_sum_human) %>%
+        dplyr::mutate (day = dplyr::case_when (is.na(day)==TRUE~ "extra",
+                                               TRUE~ as.character(day)),
+                       weekday = dplyr::case_when (is.na(weekday)==TRUE~ "extra",
+                                                   TRUE~ as.character(weekday))) -> merge2
+      
+    } else {
+      merge2 %>%
+        dplyr::mutate (nap = dplyr::case_when (nap == "ERROR"~ NA_character_,
+                                               TRUE~ as.character(nap)), 
+                       sick = dplyr::case_when (sick == "ERROR"~ NA_character_,
+                                                TRUE~ as.character(sick)),
+                       med = dplyr::case_when (med == "ERROR"~ NA_character_,
+                                               TRUE~ as.character(med)),
+                       med_text = dplyr::case_when (med_text == "ERROR"~ NA_character_,
+                                                    TRUE~ as.character(med_text))) %>%
+        dplyr::mutate (duration_sum_human = duration_sum) %>%
+        dplyr::rename (date = match,
+                       weekday = should.wd) %>%
+        dplyr::mutate (day = dplyr::case_when(is.na(day)==FALSE~ paste("day", day, sep = " "),
+                                              is.na(day)==TRUE~ "day extra")) %>%
+        dplyr::select (id, day, date, weekday, sleep_compliance, BedTime, WakeTime, NumRemove:duration_sum, duration_sum_human, nap:med_text) %>%
+        dplyr::mutate (day = dplyr::case_when (is.na(day)==TRUE~ "extra",
+                                               TRUE~ as.character(day)),
+                       weekday = dplyr::case_when (is.na(weekday)==TRUE~ "extra",
+                                                   TRUE~ as.character(weekday))) -> merge2
+    }
     
     # daylight savings
     if (daylight == T) {
