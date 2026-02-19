@@ -11,8 +11,7 @@ sleeplog <- function(path,
                      dlend) {
 
   # troubleshoot
-  # file <- read.csv("/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_January+29,+2026_16.29.csv", header = T) [-c(1:2), ]
-  # file <- haven::read_sav('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_February+7,+2026_11.54.sav')
+  # file <- haven::read_sav('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_February+12,+2026_15.38.sav')
   # file <- haven::read_sav('NIH+CON+V1+Daily+Diary+Day+8_February+7,+2026_11.07.sav')
   # 
   # path = '/Users/phoebelam/Desktop/sleep'
@@ -21,12 +20,6 @@ sleeplog <- function(path,
   # visit = 1
   # id = 3568794
   # tracker_filename = 'NIH CON Actigraphy Tracking'
-  
-  # using a different init
-  # log <- data.frame(matrix(ncol = 1, nrow = 1))
-  # other <- data.frame(matrix(ncol = 1, nrow = 1))
-  # saveRDS(log, paste(path, "sleeplog.rds", sep="/"))
-  # saveRDS(other, paste(path, "otherlog.rds", sep="/"))
   
   log_path   <- file.path(path, "sleeplog.rds")
   other_path <- file.path(path, "otherlog.rds")
@@ -56,6 +49,8 @@ sleeplog <- function(path,
       #   grepl('+8', ., ignore.case = T) -> day8check
       # basename("/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_February+7,+2026_11.07.sav") %>%
       #   grepl('+8', ., ignore.case = T) -> day8check
+      # basename('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_February+12,+2026_15.38.sav') %>%
+      #   grepl('\\+8', ., ignore.case = T) -> day8check
       
       basename(f) %>% grepl('+8', ., ignore.case = T) -> day8check
       
@@ -714,6 +709,9 @@ sleeplog <- function(path,
       rowNames = TRUE,
       colNames = FALSE,
       keepNA = FALSE)
+    
+    auxfiles <- list.files(path, '.rds', full.names=T)
+    file.remove(auxfiles)
     
     
     return ("done rolling!")
