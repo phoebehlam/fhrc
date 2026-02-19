@@ -12,8 +12,8 @@ sleeplog <- function(path,
 
   # troubleshoot
   # file <- haven::read_sav('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_February+12,+2026_15.38.sav')
-  # file <- haven::read_sav('NIH+CON+V1+Daily+Diary+Day+8_February+7,+2026_11.07.sav')
-  # 
+  # file <- haven::read_sav('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Day+8_February+17,+2026_13.15.sav')
+  
   # path = '/Users/phoebelam/Desktop/sleep'
   # filename_common_string = 'NIH+CON+V1+Daily+Diary+Day'
   # study = 'cons'
@@ -45,14 +45,12 @@ sleeplog <- function(path,
 
     if (any (file$goodid == id, na.rm=T) == TRUE) { 
       # troubleshoot
-      # basename("/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Day+8_February+7,+2026_11.07.sav") %>%
-      #   grepl('+8', ., ignore.case = T) -> day8check
-      # basename("/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_February+7,+2026_11.07.sav") %>%
-      #   grepl('+8', ., ignore.case = T) -> day8check
+      # basename('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Day+8_February+17,+2026_13.15.sav') %>%
+      #   grepl('\\+8', ., ignore.case = T) -> day8check
       # basename('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_February+12,+2026_15.38.sav') %>%
       #   grepl('\\+8', ., ignore.case = T) -> day8check
       
-      basename(f) %>% grepl('+8', ., ignore.case = T) -> day8check
+      basename(f) %>% grepl('\\+8', ., ignore.case = T) -> day8check
       
       file %>%
         dplyr::mutate (day8check = day8check) -> file
@@ -85,8 +83,9 @@ sleeplog <- function(path,
           dplyr::mutate (actual = dplyr::case_when (hour < 21 ~ as.Date(Date, "%Y-%m-%d")-2,
                                                     TRUE ~ as.Date(Date, "%Y-%m-%d") - 1)) -> file
         
-        file$actual.wd <- weekdays(as.Date(file$actual))
-        file$s_rep.actual_weekday <- weekdays(as.Date(file$s.rep_actual.adj))
+        file %>%
+          mutate(actual.wd = weekdays(as.Date(actual)),
+                 s_rep.actual_weekday = weekdays(as.Date(s.rep_actual.adj))) -> file
         
         # readability
         # labelled::val_labels(file$BedTime_3_1) # am=1, pm=2
@@ -137,8 +136,7 @@ sleeplog <- function(path,
                                      NA_character_),
             PutOn4  = dplyr::if_else(NumRemove >= 4 & !is.na(PutOn4_1_1) & !is.na(PutOn4_2_1) & !is.na(puton_ampm),
                                      paste0(PutOn4_1_1, ":", PutOn4_2_1, " ", puton_ampm),
-                                     NA_character_)
-          ) %>%
+                                     NA_character_)) %>%
           dplyr::mutate(
             remove1t = as.POSIXct(Remove1, format = "%I:%M %p"),
             remove2t = as.POSIXct(Remove2, format = "%I:%M %p"),
@@ -147,9 +145,7 @@ sleeplog <- function(path,
             puton1t  = as.POSIXct(PutOn1,  format = "%I:%M %p"),
             puton2t  = as.POSIXct(PutOn2,  format = "%I:%M %p"),
             puton3t  = as.POSIXct(PutOn3,  format = "%I:%M %p"),
-            puton4t  = as.POSIXct(PutOn4,  format = "%I:%M %p")
-          ) -> file
-        
+            puton4t  = as.POSIXct(PutOn4,  format = "%I:%M %p")) -> file
         
         
         #categorizing the 4 combinations of am/pm combo
@@ -226,8 +222,10 @@ sleeplog <- function(path,
           dplyr::rename (id = goodid) %>% 
           dplyr::mutate (hour= as.numeric(as.character(hour))) %>%
           dplyr::mutate (d.rep_actual.adj = dplyr::case_when (hour < 21 ~ as.Date(Date, "%Y-%m-%d")-1,
-                                                              TRUE ~ as.Date(Date, "%Y-%m-%d"))) %>%
-          dplyr::select (id, NumRemove, Remove1, PutOn1, RemoveReason1,
+                                                              TRUE ~ as.Date(Date, "%Y-%m-%d"))) -> file2
+        
+        file2 %>%
+          dplyr::select (., id, NumRemove, Remove1, PutOn1, RemoveReason1,
                          Remove2, PutOn2, RemoveReason2, 
                          Remove3, PutOn3, RemoveReason3,
                          Remove4, PutOn4, RemoveReason4, duration_sum, nap:med_text, d.rep_actual.adj, ResponseId) -> file2
@@ -258,14 +256,11 @@ sleeplog <- function(path,
           dplyr::mutate (s.rep_actual.adj = as.Date(Date, "%Y-%m-%d")) %>%
           dplyr::mutate (actual = as.Date(Date, "%Y-%m-%d") - 1) -> file
         
-        file$actual.wd <- weekdays(as.Date(file$actual))
+        file %>%mutate(actual.wd = weekdays(as.Date(actual)),
+                       s_rep.actual_weekday = weekdays(as.Date(s.rep_actual.adj)),
+                       BedTime = paste(BedTime_1_1, ":", BedTime_2_1, " ", BedTime_3_1),
+                       WakeTime = paste(WakeTime_1_1, ":", WakeTime_2_1, " ", WakeTime_3_1)) -> file
         
-        file$s_rep.actual_weekday <- weekdays(as.Date(file$s.rep_actual.adj))
-        
-        file$BedTime <- paste (file$BedTime_1_1, ":", file$BedTime_2_1)
-        file$BedTime <- paste (file$BedTime, " ", file$BedTime_3_1)
-        file$WakeTime <- paste (file$WakeTime_1_1, ":", file$WakeTime_2_1)
-        file$WakeTime <- paste (file$WakeTime, " ", file$WakeTime_3_1)
         
         #remove/puton hr, min, am/pm into one cell
         file %>%
@@ -365,12 +360,6 @@ sleeplog <- function(path,
         file %>%
           dplyr::mutate (duration_sum = rowSums (dplyr::select (., duration1, duration2, duration3, duration4), na.rm=TRUE)) -> file
         
-        # basename(filename) %>%
-        #   gsub ("OTR Daily Diary Day ", "", .) %>%
-        #   gsub ("MHS Daily Diary Day ", "", .) %>%
-        #   substr(., 0, 1) %>% as.numeric ()-1 -> day
-        # paste ("Day ", day, sep="") -> file$Day
-        
         file %>%
           dplyr::rename (id = goodid,
                          rawcompdate = Date,
@@ -386,7 +375,9 @@ sleeplog <- function(path,
         
         file %>% 
           dplyr::rename (id = goodid) %>% 
-          dplyr::mutate (d.rep_actual.adj = as.Date(Date, "%Y-%m-%d")) %>% #no adjustment for day 8
+          dplyr::mutate (d.rep_actual.adj = as.Date(Date, "%Y-%m-%d")) -> file2
+        
+        file2 %>%
           dplyr::select (id, NumRemove, Remove1, PutOn1, RemoveReason1,
                          Remove2, PutOn2, RemoveReason2, 
                          Remove3, PutOn3, RemoveReason3,
@@ -721,9 +712,10 @@ sleeplog <- function(path,
   
 }     
 
+# rm(list = ls())
 # library(dplyr)
 # library(openxlsx)
-# sleeplog(path = '/Users/phoebelam/Desktop/sleep',
+# sleeplog(path = '/Users/phoebelam/Desktop/cons',
 #          filename_common_string = 'NIH+CON+V1+Daily+Diary+Day',
 #          study = 'cons',
 #          visit = 1,
