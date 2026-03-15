@@ -579,22 +579,22 @@ sleeplog <- function(path,
       #grab year
       year<- as.numeric(substr(as.Date(merge2$date)[1], 0, 4))
       
-      # if(year == 2026) {
-      #   dlstart = as.Date("2026-03-08")
-      #   dlend   = as.Date("2026-11-01")
-      # } else if(year == 2027) {
-      #   dlstart = as.Date("2027-03-14")
-      #   dlend   = as.Date("2027-11-07")
-      # } else if(year == 2028) {
-      #   dlstart = as.Date("2028-03-12")
-      #   dlend   = as.Date("2028-11-05")
-      # } else if(year == 2029) {
-      #   dlstart = as.Date("2029-03-11")
-      #   dlend   = as.Date("2029-11-04")
-      # } else if(year == 2030) {
-      #   dlstart = as.Date("2030-03-10")
-      #   dlend   = as.Date("2030-11-03")
-      # }
+      if(year == 2026) {
+        dlstart = as.Date("2026-03-08")
+        dlend   = as.Date("2026-11-01")
+      } else if(year == 2027) {
+        dlstart = as.Date("2027-03-14")
+        dlend   = as.Date("2027-11-07")
+      } else if(year == 2028) {
+        dlstart = as.Date("2028-03-12")
+        dlend   = as.Date("2028-11-05")
+      } else if(year == 2029) {
+        dlstart = as.Date("2029-03-11")
+        dlend   = as.Date("2029-11-04")
+      } else if(year == 2030) {
+        dlstart = as.Date("2030-03-10")
+        dlend   = as.Date("2030-11-03")
+      }
     
       # for bedtime
       # note: dlend and dlstart done together because mutually exclusive 
