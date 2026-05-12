@@ -14,11 +14,14 @@ sleeplog <- function(path,
   # file <- haven::read_sav('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_February+12,+2026_15.38.sav')
   # file <- haven::read_sav('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Day+8_February+17,+2026_13.15.sav')
   
+  # file <- haven::read_sav('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_May+12,+2026_14.36.sav')
+  # file <- haven::read_sav('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Day+8_May+12,+2026_14.36.sav')
+
   # path = '/Users/phoebelam/Desktop/sleep'
   # filename_common_string = 'NIH+CON+V1+Daily+Diary+Day'
   # study = 'cons'
   # visit = 1
-  # id = 3568794
+  # id = 6010
   # tracker_filename = 'NIH CON Actigraphy Tracking'
   
   log_path   <- file.path(path, "sleeplog.rds")
@@ -36,18 +39,25 @@ sleeplog <- function(path,
     file <- haven::read_sav(f)
     
     file %>%
-      dplyr::mutate (externalref.check = as.numeric(as.character(ExternalReference))) -> file
+      dplyr::mutate (id_check = suppressWarnings(as.numeric(as.character(RecipientLastName)))) -> file
     
     file %>%
-      dplyr::mutate(goodid = dplyr::case_when(is.na(externalref.check)==F~ 
-                                                as.numeric(as.character(ExternalReference)))) -> file
+      dplyr::mutate(goodid = dplyr::case_when(is.na(id_check)==F~ 
+                                                suppressWarnings(as.numeric(as.character(RecipientLastName))))) -> file
     
 
     if (any (file$goodid == id, na.rm=T) == TRUE) { 
       # troubleshoot
       # basename('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Day+8_February+17,+2026_13.15.sav') %>%
       #   grepl('\\+8', ., ignore.case = T) -> day8check
+      
       # basename('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_February+12,+2026_15.38.sav') %>%
+      #   grepl('\\+8', ., ignore.case = T) -> day8check
+      
+      # basename('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Days+1-7_May+12,+2026_14.36.sav') %>%
+      #   grepl('\\+8', ., ignore.case = T) -> day8check
+      
+      # basename('/Users/phoebelam/Desktop/sleep/NIH+CON+V1+Daily+Diary+Day+8_May+12,+2026_14.36.sav') %>%
       #   grepl('\\+8', ., ignore.case = T) -> day8check
       
       basename(f) %>% grepl('\\+8', ., ignore.case = T) -> day8check
@@ -57,8 +67,10 @@ sleeplog <- function(path,
 
       # cleaning for days 1-7
       if (day8check ==F) {
+        
         file %>% dplyr::select (., StartDate, EndDate, goodid, BedTime_1_1:med_text, ResponseId) %>%
           dplyr::filter (., goodid == id )-> file
+      
         
         # end date as date completed
         file %>%
@@ -239,153 +251,161 @@ sleeplog <- function(path,
         file %>% dplyr::select (., StartDate, EndDate, goodid, BedTime_1_1:RemoveReason4, ResponseId) %>%
           dplyr::filter (., goodid == id )-> file
         
-        #fixing the date participant do the survey into tidyr::separate date and time cols
-        file %>%
-          tidyr::separate (EndDate, c("Date", "Time"), " ", fill = "right", remove = FALSE) -> file
+        if (nrow (file) > 0) {
+          
+          #fixing the date participant do the survey into tidyr::separate date and time cols
+          file %>%
+            tidyr::separate (EndDate, c("Date", "Time"), " ", fill = "right", remove = FALSE) -> file
+          
+          file %>%
+            tidyr::separate (Time, c("hour", "min", "sec"), ":", fill ="right", remove = FALSE) %>%
+            dplyr::mutate (hour = as.numeric (as.character(hour))) -> file
+          
+          # generate the dates for the sleep date participant is reporting about and the date participant reported sleep
+          # day 8 are all done in the AM, so need to undo the rule for adjustement. always just - 1 no matter what. 
+          # for "actual"= date participant is reporting about = qualtrics timestamp date - 1 (because it reference last night)
+          # for "s.rep_actual.adj" = date participant reported sleep = qualtrics timestamp date (no adjustment)
+          
+          file %>%
+            dplyr::mutate (s.rep_actual.adj = as.Date(Date, "%Y-%m-%d")) %>%
+            dplyr::mutate (actual = as.Date(Date, "%Y-%m-%d") - 1) -> file
+          
+          file %>%mutate(actual.wd = weekdays(as.Date(actual)),
+                         s_rep.actual_weekday = weekdays(as.Date(s.rep_actual.adj)),
+                         BedTime = paste(BedTime_1_1, ":", BedTime_2_1, " ", BedTime_3_1),
+                         WakeTime = paste(WakeTime_1_1, ":", WakeTime_2_1, " ", WakeTime_3_1)) -> file
+          
+          
+          #remove/puton hr, min, am/pm into one cell
+          file %>%
+            dplyr::mutate(
+              Remove1 = dplyr::case_when(
+                NumRemove >= 1 & !is.na(Remove1_1_1) & !is.na(Remove1_2_1) & !is.na(Remove1_3_1) ~
+                  paste(Remove1_1_1, ":", Remove1_2_1, " ", Remove1_3_1),
+                TRUE ~ NA_character_
+              ),
+              Remove2 = dplyr::case_when(
+                NumRemove >= 2 & !is.na(Remove2_1_1) & !is.na(Remove2_2_1) & !is.na(Remove2_3_1) ~
+                  paste(Remove2_1_1, ":", Remove2_2_1, " ", Remove2_3_1),
+                TRUE ~ NA_character_
+              ),
+              Remove3 = dplyr::case_when(
+                NumRemove >= 3 & !is.na(Remove3_1_1) & !is.na(Remove3_2_1) & !is.na(Remove3_3_1) ~
+                  paste(Remove3_1_1, ":", Remove3_2_1, " ", Remove3_3_1),
+                TRUE ~ NA_character_
+              ),
+              Remove4 = dplyr::case_when(
+                NumRemove >= 4 & !is.na(Remove4_1_1) & !is.na(Remove4_2_1) & !is.na(Remove4_3_1) ~
+                  paste(Remove4_1_1, ":", Remove4_2_1, " ", Remove4_3_1),
+                TRUE ~ NA_character_
+              ),
+              
+              PutOn1 = dplyr::case_when(
+                NumRemove >= 1 & !is.na(PutOn1_1_1) & !is.na(PutOn1_2_1) & !is.na(PutOn1_3_1) ~
+                  paste(PutOn1_1_1, ":", PutOn1_2_1, " ", PutOn1_3_1),
+                TRUE ~ NA_character_
+              ),
+              PutOn2 = dplyr::case_when(
+                NumRemove >= 2 & !is.na(PutOn2_1_1) & !is.na(PutOn2_2_1) & !is.na(PutOn2_3_1) ~
+                  paste(PutOn2_1_1, ":", PutOn2_2_1, " ", PutOn2_3_1),
+                TRUE ~ NA_character_
+              ),
+              PutOn3 = dplyr::case_when(
+                NumRemove >= 3 & !is.na(PutOn3_1_1) & !is.na(PutOn3_2_1) & !is.na(PutOn3_3_1) ~
+                  paste(PutOn3_1_1, ":", PutOn3_2_1, " ", PutOn3_3_1),
+                TRUE ~ NA_character_
+              ),
+              PutOn4 = dplyr::case_when(
+                NumRemove >= 4 & !is.na(PutOn4_1_1) & !is.na(PutOn4_2_1) & !is.na(PutOn4_3_1) ~
+                  paste(PutOn4_1_1, ":", PutOn4_2_1, " ", PutOn4_3_1),
+                TRUE ~ NA_character_
+              )
+            ) %>%
+            dplyr::mutate(
+              remove1t = as.POSIXct(Remove1, format = "%I : %M %p"),
+              remove2t = as.POSIXct(Remove2, format = "%I : %M %p"),
+              remove3t = as.POSIXct(Remove3, format = "%I : %M %p"),
+              remove4t = as.POSIXct(Remove4, format = "%I : %M %p"),
+              puton1t  = as.POSIXct(PutOn1,  format = "%I : %M %p"),
+              puton2t  = as.POSIXct(PutOn2,  format = "%I : %M %p"),
+              puton3t  = as.POSIXct(PutOn3,  format = "%I : %M %p"),
+              puton4t  = as.POSIXct(PutOn4,  format = "%I : %M %p")
+            ) -> file
+          
+          
+          #categorizing the 4 combinations of am/pm combo
+          file %>%
+            dplyr::mutate (ampmcheck1 = dplyr::case_when (as.character(Remove1_3_1) == "PM" & as.character(PutOn1_3_1) == "AM" ~ 1,
+                                                          as.character(Remove1_3_1) == "AM" & as.character(PutOn1_3_1) == "PM" ~ 2,
+                                                          as.character(Remove1_3_1) == "PM" & as.character(PutOn1_3_1) == "PM" ~ 3,
+                                                          as.character(Remove1_3_1) == "AM" & as.character(PutOn1_3_1) == "AM" ~ 4,
+                                                          TRUE ~ NA_real_),
+                           ampmcheck2 = dplyr::case_when (as.character(Remove2_3_1) == "PM" & as.character(PutOn2_3_1) == "AM" ~ 1,
+                                                          as.character(Remove2_3_1) == "AM" & as.character(PutOn2_3_1) == "PM" ~ 2,
+                                                          as.character(Remove2_3_1) == "PM" & as.character(PutOn2_3_1) == "PM" ~ 3,
+                                                          as.character(Remove2_3_1) == "AM" & as.character(PutOn2_3_1) == "AM" ~ 4,
+                                                          TRUE ~ NA_real_),
+                           ampmcheck3 = dplyr::case_when (as.character(Remove3_3_1) == "PM" & as.character(PutOn3_3_1) == "AM" ~ 1,
+                                                          as.character(Remove3_3_1) == "AM" & as.character(PutOn3_3_1) == "PM" ~ 2,
+                                                          as.character(Remove3_3_1) == "PM" & as.character(PutOn3_3_1) == "PM" ~ 3,
+                                                          as.character(Remove3_3_1) == "AM" & as.character(PutOn3_3_1) == "AM" ~ 4,
+                                                          TRUE ~ NA_real_),
+                           ampmcheck4 = dplyr::case_when (as.character(Remove4_3_1) == "PM" & as.character(PutOn4_3_1) == "AM" ~ 1,
+                                                          as.character(Remove4_3_1) == "AM" & as.character(PutOn4_3_1) == "PM" ~ 2,
+                                                          as.character(Remove4_3_1) == "PM" & as.character(PutOn4_3_1) == "PM" ~ 3,
+                                                          as.character(Remove4_3_1) == "AM" & as.character(PutOn4_3_1) == "AM" ~ 4,
+                                                          TRUE ~ NA_real_)) -> file
+          
+          #computing duration by each occassion, only treating PM -> AM versions for now
+          file %>%  
+            dplyr::mutate (duration1 = dplyr::case_when (ampmcheck1 == 1 ~ as.numeric(as.character(difftime(file$puton1t + lubridate::hours (24), file$remove1t, units= "mins"))),
+                                                         TRUE ~ as.numeric (as.character (difftime(puton1t, remove1t, units= "mins")))),
+                           
+                           duration2 = dplyr::case_when (ampmcheck2 == 1 ~ as.numeric(as.character(difftime(file$puton2t + lubridate::hours (24), file$remove2t, units= "mins"))),
+                                                         TRUE ~ as.numeric (as.character (difftime(puton2t, remove2t, units= "mins")))),
+                           
+                           duration3 = dplyr::case_when (ampmcheck3 == 1 ~ as.numeric(as.character(difftime(file$puton3t + lubridate::hours (24), file$remove3t, units= "mins"))),
+                                                         TRUE ~ as.numeric (as.character (difftime(puton3t, remove3t, units= "mins")))),
+                           
+                           duration4 = dplyr::case_when (ampmcheck4 == 1 ~ as.numeric(as.character(difftime(file$puton4t + lubridate::hours (24), file$remove4t, units= "mins"))),
+                                                         TRUE ~ as.numeric (as.character (difftime(puton4t, remove4t, units= "mins"))))) -> file
+          
+          #computing duration for the day
+          file %>%
+            dplyr::mutate (duration_sum = rowSums (dplyr::select (., duration1, duration2, duration3, duration4), na.rm=TRUE)) -> file
+          
+          file %>%
+            dplyr::rename (id = goodid,
+                           rawcompdate = Date,
+                           rawcomptime = Time,
+                           rawcompdt = EndDate) %>% 
+            dplyr::select(id, actual.wd, actual,
+                          BedTime, WakeTime,
+                          rawcompdt, rawcompdate, rawcomptime, ResponseId) -> file1
+          
+          log <- readRDS(file.path(path, "sleeplog.rds"))
+          log <- dplyr::bind_rows(log, file1)
+          saveRDS(log, file.path(path, "sleeplog.rds"))
+          
+          file %>% 
+            dplyr::rename (id = goodid) %>% 
+            dplyr::mutate (d.rep_actual.adj = as.Date(Date, "%Y-%m-%d")) -> file2
+          
+          file2 %>%
+            dplyr::select (id, NumRemove, Remove1, PutOn1, RemoveReason1,
+                           Remove2, PutOn2, RemoveReason2, 
+                           Remove3, PutOn3, RemoveReason3,
+                           Remove4, PutOn4, RemoveReason4, duration_sum, d.rep_actual.adj) -> file2
+          
+          other <- readRDS (file.path(path, "otherlog.rds"))
+          other <- dplyr::bind_rows (other, file2)
+          saveRDS (other, file.path(path, "otherlog.rds"))
+          
+        } else {
+          print('no day 8 entry found')
+        }
+      
         
-        file %>%
-          tidyr::separate (Time, c("hour", "min", "sec"), ":", fill ="right", remove = FALSE) %>%
-          dplyr::mutate (hour = as.numeric (as.character(hour))) -> file
-        
-        # generate the dates for the sleep date participant is reporting about and the date participant reported sleep
-        # day 8 are all done in the AM, so need to undo the rule for adjustement. always just - 1 no matter what. 
-        # for "actual"= date participant is reporting about = qualtrics timestamp date - 1 (because it reference last night)
-        # for "s.rep_actual.adj" = date participant reported sleep = qualtrics timestamp date (no adjustment)
-        
-        file %>%
-          dplyr::mutate (s.rep_actual.adj = as.Date(Date, "%Y-%m-%d")) %>%
-          dplyr::mutate (actual = as.Date(Date, "%Y-%m-%d") - 1) -> file
-        
-        file %>%mutate(actual.wd = weekdays(as.Date(actual)),
-                       s_rep.actual_weekday = weekdays(as.Date(s.rep_actual.adj)),
-                       BedTime = paste(BedTime_1_1, ":", BedTime_2_1, " ", BedTime_3_1),
-                       WakeTime = paste(WakeTime_1_1, ":", WakeTime_2_1, " ", WakeTime_3_1)) -> file
-        
-        
-        #remove/puton hr, min, am/pm into one cell
-        file %>%
-          dplyr::mutate(
-            Remove1 = dplyr::case_when(
-              NumRemove >= 1 & !is.na(Remove1_1_1) & !is.na(Remove1_2_1) & !is.na(Remove1_3_1) ~
-                paste(Remove1_1_1, ":", Remove1_2_1, " ", Remove1_3_1),
-              TRUE ~ NA_character_
-            ),
-            Remove2 = dplyr::case_when(
-              NumRemove >= 2 & !is.na(Remove2_1_1) & !is.na(Remove2_2_1) & !is.na(Remove2_3_1) ~
-                paste(Remove2_1_1, ":", Remove2_2_1, " ", Remove2_3_1),
-              TRUE ~ NA_character_
-            ),
-            Remove3 = dplyr::case_when(
-              NumRemove >= 3 & !is.na(Remove3_1_1) & !is.na(Remove3_2_1) & !is.na(Remove3_3_1) ~
-                paste(Remove3_1_1, ":", Remove3_2_1, " ", Remove3_3_1),
-              TRUE ~ NA_character_
-            ),
-            Remove4 = dplyr::case_when(
-              NumRemove >= 4 & !is.na(Remove4_1_1) & !is.na(Remove4_2_1) & !is.na(Remove4_3_1) ~
-                paste(Remove4_1_1, ":", Remove4_2_1, " ", Remove4_3_1),
-              TRUE ~ NA_character_
-            ),
-            
-            PutOn1 = dplyr::case_when(
-              NumRemove >= 1 & !is.na(PutOn1_1_1) & !is.na(PutOn1_2_1) & !is.na(PutOn1_3_1) ~
-                paste(PutOn1_1_1, ":", PutOn1_2_1, " ", PutOn1_3_1),
-              TRUE ~ NA_character_
-            ),
-            PutOn2 = dplyr::case_when(
-              NumRemove >= 2 & !is.na(PutOn2_1_1) & !is.na(PutOn2_2_1) & !is.na(PutOn2_3_1) ~
-                paste(PutOn2_1_1, ":", PutOn2_2_1, " ", PutOn2_3_1),
-              TRUE ~ NA_character_
-            ),
-            PutOn3 = dplyr::case_when(
-              NumRemove >= 3 & !is.na(PutOn3_1_1) & !is.na(PutOn3_2_1) & !is.na(PutOn3_3_1) ~
-                paste(PutOn3_1_1, ":", PutOn3_2_1, " ", PutOn3_3_1),
-              TRUE ~ NA_character_
-            ),
-            PutOn4 = dplyr::case_when(
-              NumRemove >= 4 & !is.na(PutOn4_1_1) & !is.na(PutOn4_2_1) & !is.na(PutOn4_3_1) ~
-                paste(PutOn4_1_1, ":", PutOn4_2_1, " ", PutOn4_3_1),
-              TRUE ~ NA_character_
-            )
-          ) %>%
-          dplyr::mutate(
-            remove1t = as.POSIXct(Remove1, format = "%I : %M %p"),
-            remove2t = as.POSIXct(Remove2, format = "%I : %M %p"),
-            remove3t = as.POSIXct(Remove3, format = "%I : %M %p"),
-            remove4t = as.POSIXct(Remove4, format = "%I : %M %p"),
-            puton1t  = as.POSIXct(PutOn1,  format = "%I : %M %p"),
-            puton2t  = as.POSIXct(PutOn2,  format = "%I : %M %p"),
-            puton3t  = as.POSIXct(PutOn3,  format = "%I : %M %p"),
-            puton4t  = as.POSIXct(PutOn4,  format = "%I : %M %p")
-          ) -> file
-        
-        
-        #categorizing the 4 combinations of am/pm combo
-        file %>%
-          dplyr::mutate (ampmcheck1 = dplyr::case_when (as.character(Remove1_3_1) == "PM" & as.character(PutOn1_3_1) == "AM" ~ 1,
-                                                        as.character(Remove1_3_1) == "AM" & as.character(PutOn1_3_1) == "PM" ~ 2,
-                                                        as.character(Remove1_3_1) == "PM" & as.character(PutOn1_3_1) == "PM" ~ 3,
-                                                        as.character(Remove1_3_1) == "AM" & as.character(PutOn1_3_1) == "AM" ~ 4,
-                                                        TRUE ~ NA_real_),
-                         ampmcheck2 = dplyr::case_when (as.character(Remove2_3_1) == "PM" & as.character(PutOn2_3_1) == "AM" ~ 1,
-                                                        as.character(Remove2_3_1) == "AM" & as.character(PutOn2_3_1) == "PM" ~ 2,
-                                                        as.character(Remove2_3_1) == "PM" & as.character(PutOn2_3_1) == "PM" ~ 3,
-                                                        as.character(Remove2_3_1) == "AM" & as.character(PutOn2_3_1) == "AM" ~ 4,
-                                                        TRUE ~ NA_real_),
-                         ampmcheck3 = dplyr::case_when (as.character(Remove3_3_1) == "PM" & as.character(PutOn3_3_1) == "AM" ~ 1,
-                                                        as.character(Remove3_3_1) == "AM" & as.character(PutOn3_3_1) == "PM" ~ 2,
-                                                        as.character(Remove3_3_1) == "PM" & as.character(PutOn3_3_1) == "PM" ~ 3,
-                                                        as.character(Remove3_3_1) == "AM" & as.character(PutOn3_3_1) == "AM" ~ 4,
-                                                        TRUE ~ NA_real_),
-                         ampmcheck4 = dplyr::case_when (as.character(Remove4_3_1) == "PM" & as.character(PutOn4_3_1) == "AM" ~ 1,
-                                                        as.character(Remove4_3_1) == "AM" & as.character(PutOn4_3_1) == "PM" ~ 2,
-                                                        as.character(Remove4_3_1) == "PM" & as.character(PutOn4_3_1) == "PM" ~ 3,
-                                                        as.character(Remove4_3_1) == "AM" & as.character(PutOn4_3_1) == "AM" ~ 4,
-                                                        TRUE ~ NA_real_)) -> file
-        
-        #computing duration by each occassion, only treating PM -> AM versions for now
-        file %>%  
-          dplyr::mutate (duration1 = dplyr::case_when (ampmcheck1 == 1 ~ as.numeric(as.character(difftime(file$puton1t + lubridate::hours (24), file$remove1t, units= "mins"))),
-                                                       TRUE ~ as.numeric (as.character (difftime(puton1t, remove1t, units= "mins")))),
-                         
-                         duration2 = dplyr::case_when (ampmcheck2 == 1 ~ as.numeric(as.character(difftime(file$puton2t + lubridate::hours (24), file$remove2t, units= "mins"))),
-                                                       TRUE ~ as.numeric (as.character (difftime(puton2t, remove2t, units= "mins")))),
-                         
-                         duration3 = dplyr::case_when (ampmcheck3 == 1 ~ as.numeric(as.character(difftime(file$puton3t + lubridate::hours (24), file$remove3t, units= "mins"))),
-                                                       TRUE ~ as.numeric (as.character (difftime(puton3t, remove3t, units= "mins")))),
-                         
-                         duration4 = dplyr::case_when (ampmcheck4 == 1 ~ as.numeric(as.character(difftime(file$puton4t + lubridate::hours (24), file$remove4t, units= "mins"))),
-                                                       TRUE ~ as.numeric (as.character (difftime(puton4t, remove4t, units= "mins"))))) -> file
-        
-        #computing duration for the day
-        file %>%
-          dplyr::mutate (duration_sum = rowSums (dplyr::select (., duration1, duration2, duration3, duration4), na.rm=TRUE)) -> file
-        
-        file %>%
-          dplyr::rename (id = goodid,
-                         rawcompdate = Date,
-                         rawcomptime = Time,
-                         rawcompdt = EndDate) %>% 
-          dplyr::select(id, actual.wd, actual,
-                        BedTime, WakeTime,
-                        rawcompdt, rawcompdate, rawcomptime, ResponseId) -> file1
-        
-        log <- readRDS(file.path(path, "sleeplog.rds"))
-        log <- dplyr::bind_rows(log, file1)
-        saveRDS(log, file.path(path, "sleeplog.rds"))
-        
-        file %>% 
-          dplyr::rename (id = goodid) %>% 
-          dplyr::mutate (d.rep_actual.adj = as.Date(Date, "%Y-%m-%d")) -> file2
-        
-        file2 %>%
-          dplyr::select (id, NumRemove, Remove1, PutOn1, RemoveReason1,
-                         Remove2, PutOn2, RemoveReason2, 
-                         Remove3, PutOn3, RemoveReason3,
-                         Remove4, PutOn4, RemoveReason4, duration_sum, d.rep_actual.adj) -> file2
-        
-        other <- readRDS (file.path(path, "otherlog.rds"))
-        other <- dplyr::bind_rows (other, file2)
-        saveRDS (other, file.path(path, "otherlog.rds"))
         
       }
     }
@@ -453,7 +473,7 @@ sleeplog <- function(path,
   #check whether there are any entries at all
   log <- readRDS (file.path(path, 'sleeplog.rds'))
   
-  if (nrow (log) > 0) {
+  if (!is.null(log) && nrow(log) > 0) {
     
     #add weekday and then dplyr::rename ID to id to match other sheets
     trackl %>%
@@ -513,10 +533,10 @@ sleeplog <- function(path,
       dplyr::mutate (sleep_compliance = dplyr::case_when (s_rep_diff < 9 ~ "ok",
                                                           s_rep_diff >= 9 & s_rep_diff < 16 ~ "late:before noon",
                                                           s_rep_diff >= 16 ~ "late:past noon",
-                                                          day == 8 ~ NA_character_,
+                                                          day == 8 ~ 'missed',
                                                           is.na(day)== TRUE ~ NA_character_,
                                                           TRUE~ "missed")) -> merge1
-    
+
     #binging alert
     #binge defined by two entries indexing the same sleep date
     merge1 %>%
@@ -679,14 +699,14 @@ sleeplog <- function(path,
       merge2 %>%
         dplyr::mutate(BedTime =  bed_adjdl_char ,
                WakeTime = wake_adjdl_char,
-               Remove1 =  re1_adjdl_char ,
-               Remove2 =  re2_adjdl_char ,
-               Remove3 =  re3_adjdl_char ,
-               Remove4 =  re4_adjdl_char ,
-               PutOn1 =   po1_adjdl_char ,
-               PutOn2 =   po2_adjdl_char ,
-               PutOn3 =   po3_adjdl_char ,
-               PutOn4 =   po4_adjdl_char  ) %>%
+               Remove1 =  re1_adjdl_char,
+               Remove2 =  re2_adjdl_char,
+               Remove3 =  re3_adjdl_char,
+               Remove4 =  re4_adjdl_char,
+               PutOn1 =   po1_adjdl_char,
+               PutOn2 =   po2_adjdl_char,
+               PutOn3 =   po3_adjdl_char,
+               PutOn4 =   po4_adjdl_char) %>%
         dplyr::select (id:med_text, beddl, wakedl, Remove1_dl, PutOn1_dl,
                 Remove2_dl, PutOn2_dl, Remove3_dl, PutOn3_dl,
                 Remove4_dl, PutOn4_dl) -> merge2
@@ -704,7 +724,6 @@ sleeplog <- function(path,
     auxfiles <- list.files(path, '.rds', full.names=T)
     file.remove(auxfiles)
     
-    
     return ("done rolling!")
   } else {
     return ("no sleep log generated: do not have at least one entry")
@@ -715,14 +734,12 @@ sleeplog <- function(path,
 # rm(list = ls())
 # library(dplyr)
 # library(openxlsx)
-# sleeplog(path = '/Users/phoebelam/Desktop/cons',
+# sleeplog(path = '/Users/phoebelam/Desktop/sleep',
 #          filename_common_string = 'NIH+CON+V1+Daily+Diary+Day',
 #          study = 'cons',
 #          visit = 1,
-#          id = 3568794,
+#          id = 6015,
 #          tracker_filename = 'NIH CON Actigraphy Tracking')
-
-
 
 
 
