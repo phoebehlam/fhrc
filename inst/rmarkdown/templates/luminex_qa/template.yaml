@@ -1,0 +1,5 @@
+name: fhrc Luminex QA report
+description: >
+  Pre-repeats quality assurance report for Luminex cell-culture supernatant
+  data. Set master_file in the YAML header and knit.
+create_dir: false

@@ -1,6 +1,6 @@
 Package: fhrc
 Title: provide fhrc lab with different r scripts
-Version: 0.0.0.9000
+Version: 0.0.0.9001
 Authors@R: 
     person(given = "phoebe",
            family = "lam",
@@ -13,7 +13,24 @@ LazyData: true
 Imports:
 	magrittr,
 	dplyr,
-	tidyr
-RoxygenNote: 7.2.3
+	tidyr,
+	openxlsx,
+	stats,
+	utils,
+	rmarkdown,
+	knitr,
+	ggplot2,
+	htmltools
+Suggests:
+	testthat (>= 3.0.0),
+	xlsx,
+	gtools,
+	janitor,
+	stringr,
+	pecan
+Remotes:
+	phoebehlam/pecan
+Config/testthat/edition: 3
+RoxygenNote: 7.3.1
 Depends: 
-    R (>= 2.10)
+    R (>= 3.5)
