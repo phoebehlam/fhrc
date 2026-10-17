@@ -260,6 +260,18 @@ print.luminex_qa <- function(x, ...) {
 
 .lqa_num <- function(x) suppressWarnings(as.numeric(as.character(x)))
 
+# distance from the cohort median in robust SD units; NA where it cannot be computed
+# (non-finite values, e.g. a ratio over a US well of 0, or no spread in the cohort)
+.lqa_robust_z <- function(x) {
+  ok <- is.finite(x)
+  out <- rep(NA_real_, length(x))
+  if (sum(ok) < 3) return(out)
+  s <- stats::mad(x[ok]); if (!is.finite(s) || s == 0) s <- stats::sd(x[ok])
+  if (!is.finite(s) || s == 0) return(out)
+  out[ok] <- (x[ok] - stats::median(x[ok])) / s
+  out
+}
+
 .lqa_parse_ids <- function(id) {
   pat <- "^([A-Za-z]+)_([0-9]{3,4})_([Vv][0-9]+)_(.+?)(?:_((?i)repeat[0-9]*|interassay))?$"
   m <- regmatches(id, regexec(pat, id, perl = TRUE))
@@ -426,13 +438,10 @@ print.luminex_qa <- function(x, ...) {
                    ifelse(!is.na(d$slope) & d$slope >= 0, "no inhibition (slope >= 0)", ""))
   # inhibition at the top dose, compared with everyone else on the same series x cytokine
   d$cohort_median_suppression <- stats::ave(d$suppression_top_pct, d$series, d$analyte,
-                                            FUN = function(x) stats::median(x, na.rm = TRUE))
-  d$suppression_z <- stats::ave(d$suppression_top_pct, d$series, d$analyte, FUN = function(x) {
-    s <- stats::mad(x, na.rm = TRUE); if (!is.finite(s) || s == 0) s <- stats::sd(x, na.rm = TRUE)
-    (x - stats::median(x, na.rm = TRUE)) / s
-  })
-  d$weak_vs_cohort <- !is.na(d$suppression_z) & d$suppression_z < -3 &
-    d$suppression_top_pct < d$cohort_median_suppression / 2
+                                            FUN = function(x) stats::median(x[is.finite(x)]))
+  d$suppression_z <- stats::ave(d$suppression_top_pct, d$series, d$analyte, FUN = .lqa_robust_z)
+  d$weak_vs_cohort <- (d$suppression_z < -3 &
+                         d$suppression_top_pct < d$cohort_median_suppression / 2) %in% TRUE
   d$series_conds <- vapply(d$series, function(nm)
     paste(c(dose_series[[nm]]$reference, names(dose_series[[nm]]$doses)), collapse = ","), "")
   d
@@ -484,15 +493,13 @@ print.luminex_qa <- function(x, ...) {
   stim <- contrasts[contrasts$lower == "us", , drop = FALSE]
   weak <- empty
   if (nrow(stim)) {
-    w <- cmp[cmp$test %in% stim$test & !is.na(cmp$ratio) & cmp$ratio > 0, ]
+    # fold over US; US wells at or below 0 Net MFI give no usable fold and are skipped
+    w <- cmp[cmp$test %in% stim$test & is.finite(cmp$ratio) & cmp$ratio > 0, ]
     w$lf <- log2(w$ratio)
-    w$z <- stats::ave(w$lf, w$test, w$analyte, FUN = function(x) {
-      s <- stats::mad(x, na.rm = TRUE); if (!is.finite(s) || s == 0) s <- stats::sd(x, na.rm = TRUE)
-      (x - stats::median(x, na.rm = TRUE)) / s
-    })
+    w$z <- if (nrow(w)) stats::ave(w$lf, w$test, w$analyte, FUN = .lqa_robust_z) else numeric(0)
     grp <- split(w, list(w$id_num, w$higher), drop = TRUE)
     hit <- do.call(rbind, lapply(grp, function(g) {
-      if (nrow(g) >= 2 && all(g$z < -3)) data.frame(id_num = g$id_num[1], higher = g$higher[1],
+      if (nrow(g) >= 2 && isTRUE(all(g$z < -3))) data.frame(id_num = g$id_num[1], higher = g$higher[1],
                                                     fold = max(g$ratio), stringsAsFactors = FALSE)
     }))
     if (!is.null(hit) && nrow(hit)) {
@@ -676,6 +683,7 @@ print.luminex_qa <- function(x, ...) {
     pair <- strsplit(pt$swaps$conds[i], ",")[[1]]
     v <- x$values[x$values$id_num == p & x$values$condition %in% pair & !is.na(x$values$value) & x$values$value > 0, ]
     mlog <- tapply(log(v$value), v$condition, mean)
+    if (length(mlog) < 2) next          # values at or below 0: no way to say which reads higher
     hi <- names(which.max(mlog)); lo <- setdiff(pair, hi)
     tt <- paste0(hi, " > ", lo)
     k <- which(bp_id == p & bp_issue == tt)

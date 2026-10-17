@@ -134,3 +134,28 @@ test_that("every reversal at the regular wells is in the summary; low-dose ones 
   expect_false(any(grepl("crt_7|crt_6.5|il10_.02", sm$detail)))
   expect_true(all(qa$low_dose$test %in% c("crt_7 > lps", "crt_6.5 > lps", "il10_.02 > lps")))
 })
+
+test_that("messy real-world values do not crash any setting (zeros, negatives, blanks, text)", {
+  set.seed(7)
+  base <- luminex_example(il10 = TRUE)
+  mfi_cols <- grep("_avg_mfi$", names(base), value = TRUE)
+  us <- grepl("_us$", base$id)
+  messy <- list(
+    zeros_in_us   = within(base, il1b_avg_mfi[us & runif(nrow(base)) < 0.7] <- 0),
+    all_us_zero   = within(base, il1b_avg_mfi[us] <- 0),
+    negative_us   = within(base, il6_avg_mfi[us & runif(nrow(base)) < 0.6] <- -4.2),
+    blank_us      = within(base, tnfa_avg_mfi[us] <- NA),
+    one_us_value  = within(base, { il1b_avg_mfi[us] <- NA; il1b_avg_mfi[which(us)[1]] <- 30 }),
+    zero_lps      = within(base, il6_avg_mfi[grepl("_lps$", id)] <- 0),
+    text_values   = { b <- base; b$il6_avg_mfi <- as.character(b$il6_avg_mfi); b$il6_avg_mfi[1:20] <- "NaN"; b },
+    identical_us  = within(base, il1b_avg_mfi[us] <- 25),
+    two_people    = base[grepl("_100[01]_", base$id), ]
+  )
+  settings <- expand.grid(hsp60 = c(TRUE, FALSE), r848 = c(TRUE, FALSE), il10 = c(TRUE, FALSE))
+  for (nm in names(messy)) for (k in seq_len(nrow(settings))) {
+    st <- settings[k, ]
+    q <- luminex_qa(messy[[nm]], hsp60 = st$hsp60, r848 = st$r848, il10 = st$il10)
+    expect_s3_class(q, "luminex_qa")
+    expect_false(anyNA(q$dose$weak_vs_cohort))
+  }
+})
