@@ -40,10 +40,10 @@ test_that("data entry and missing data problems are stated plainly", {
   expect_true(has("1035", "missing data", "r848: tnfa blank"))
 })
 
-test_that("dose-response, pattern and plate problems are found", {
+test_that("dose-response and pattern problems are found; no plate rows", {
   expect_true(has("1023", "no dose-response", "cortisol: no substantive decrease with dose in"))
   expect_true(has("1027", "us > hsp60", "il1b"))
-  expect_true(any(sm$issue == "plate" & grepl("Plate 09", sm$plate)))
+  expect_false(any(sm$issue == "plate"))
 })
 
 test_that("summary states problems only: no percentages, guesses or attributions", {
@@ -54,8 +54,8 @@ test_that("summary states problems only: no percentages, guesses or attributions
 
 test_that("no unplanted participant gets a data, bench-error or dose-response row", {
   planted <- c("1003", "1007", "1011", "1015", "1019", "1023", "1035", "1043")
-  serious <- sm$issue %in% c("duplicated data", "unknown condition", "missing data", "no dose-response") |
-    grepl("\\?", sm$detail)
+  serious <- sm$issue %in% c("duplicated data", "unknown condition", "missing data") |
+    grepl("\\?", sm$detail) | (sm$issue == "no dose-response" & grepl("no substantive", sm$detail))
   got <- unique(sm$participant[serious & grepl("^[0-9]+$", sm$participant)])
   expect_setequal(got, planted)
 })
@@ -81,9 +81,28 @@ test_that("two visits in one file are fine: no visit flag, participants kept apa
   expect_equal(q$settings$visit, "V1 & V2")
 })
 
-test_that("a missing LPS well is not a dose-response problem", {
-  expect_false(has("1019", "no dose-response"))
-  expect_false(has("1007", "no dose-response"))
+test_that("dose-response is scored like the scoring step and catches flat lines and dips", {
+  # by hand: ln(max(well - us, 0) + 1)
+  v <- qa$values
+  get <- function(cond, a) v$value[v$id_num == "1005" & v$condition == cond & v$analyte == a]
+  dp <- qa$dose_points
+  expect_equal(dp$score[dp$id_num == "1005" & dp$series == "cortisol" & dp$analyte == "il6" & dp$step == 0],
+               log(max(get("lps", "il6") - get("us", "il6"), 0) + 1))
+  expect_equal(dp$score[dp$id_num == "1005" & dp$series == "cortisol" & dp$analyte == "il6" & dp$step == 4],
+               log(max(get("crt_5.5", "il6") - get("us", "il6"), 0) + 1))
+  expect_equal(dp$condition[dp$id_num == "1005" & dp$series == "cortisol" & dp$analyte == "il6"],
+               c("lps", "crt_7", "crt_6.5", "crt_6", "crt_5.5"))
+  # planted problems
+  expect_true(has("1023", "no dose-response", "cortisol: no substantive decrease with dose in"))
+  expect_true(has("1043", "no dose-response", "goes up from crt_7 to crt_6.5"))
+  expect_true(has("1007", "no dose-response", "goes up from lps to crt_7"))
+  # a single odd dip is tagged
+  d <- luminex_example(study = "OTR", il10 = TRUE)
+  k <- d$id == "OTR_1010_V1_crt_7"
+  d$il1b_avg_mfi[k] <- d$il1b_avg_mfi[d$id == "OTR_1010_V1_us"] + 2
+  q <- luminex_qa(d, il10 = TRUE)
+  expect_true(any(q$summary$participant == "1010" & q$summary$issue == "no dose-response" &
+                    grepl("goes up from crt_7 to crt_6.5 (il1b)", q$summary$detail, fixed = TRUE)))
 })
 
 test_that("il10 / hsp60 / r848 switches work", {
@@ -93,12 +112,14 @@ test_that("il10 / hsp60 / r848 switches work", {
   expect_false(any(grepl("il10", q$summary$detail)))
 
   q <- luminex_qa(luminex_example(il10 = TRUE), il10 = FALSE)
-  expect_true(any(q$summary$issue == "set-up" & grepl("il10 = FALSE", q$summary$detail)))
+  expect_true("il10_.5" %in% q$settings$switched_off)
+  expect_false(any(q$summary$participant == "(file)"))
   expect_false(any(grepl("il10", q$contrasts$test)))
   expect_false(any(q$integrity$unexpected$condition %in% c("il10_.02", "il10_.1", "il10_.5")))
 
   q <- luminex_qa(luminex_example(il10 = FALSE), il10 = TRUE)
-  expect_true(any(q$summary$issue == "set-up" & grepl("il10_.5", q$summary$detail)))
+  expect_true("il10_.5" %in% q$settings$never_seen)
+  expect_false(any(q$summary$participant == "(file)"))
   expect_false(any(grepl("il10", q$missing$condition)))
 
   q <- luminex_qa(luminex_example(), hsp60 = FALSE, r848 = FALSE)
@@ -131,7 +152,7 @@ test_that("every reversal at the regular wells is in the summary; low-dose ones 
   }
   low <- qa$contrasts[qa$contrasts$flag & qa$contrasts$tier == "sensitive", ]
   expect_setequal(unique(qa$low_dose$participant), unique(low$id_num))
-  expect_false(any(grepl("crt_7|crt_6.5|il10_.02", sm$detail)))
+  expect_false(any(grepl("crt_7|crt_6.5|il10_.02", sm$detail[sm$issue != "no dose-response"])))
   expect_true(all(qa$low_dose$test %in% c("crt_7 > lps", "crt_6.5 > lps", "il10_.02 > lps")))
 })
 
@@ -156,6 +177,6 @@ test_that("messy real-world values do not crash any setting (zeros, negatives, b
     st <- settings[k, ]
     q <- luminex_qa(messy[[nm]], hsp60 = st$hsp60, r848 = st$r848, il10 = st$il10)
     expect_s3_class(q, "luminex_qa")
-    expect_false(anyNA(q$dose$weak_vs_cohort))
+    if (length(q$dose) && nrow(q$dose)) expect_false(anyNA(q$dose$issue))
   }
 })

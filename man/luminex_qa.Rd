@@ -17,6 +17,7 @@ luminex_qa(
   measure = "avg_mfi",
   cv_threshold = 10,
   tolerance = 0,
+  dip_pct = 25,
   study = NULL,
   visit = NULL
 )
@@ -49,6 +50,9 @@ high CV in the flag details (default 10).}
 \item{tolerance}{Percent. A comparison is flagged only when the expected
 higher well is more than `tolerance`\% below the other. Default 0 (any
 reversal), matching the original script.}
+
+\item{dip_pct}{Percent. In the dose-response check, a scored value that
+rises by more than this from one dose to the next is listed (default 25).}
 
 \item{study, visit}{Labels for the report. Default: taken from the ids.}
 }

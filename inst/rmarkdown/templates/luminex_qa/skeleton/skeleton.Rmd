@@ -116,6 +116,17 @@ table.qa td { vertical-align: top; }
 ```
 
 
+```{r setup_note, results = "asis"}
+not_indicated <- c("hsp60", "r848", "il10")[!c(isTRUE(S$hsp60), isTRUE(S$r848), isTRUE(S$il10))]
+if (length(not_indicated)) {
+  lst <- if (length(not_indicated) == 1) not_indicated else
+    paste0(paste(not_indicated[-length(not_indicated)], collapse = ", "), " and ", not_indicated[length(not_indicated)])
+  cat(sprintf("<p>You did not indicate there are %s wells. Make sure that's correct.</p>\n", lst))
+}
+if (length(S$never_seen))
+  cat(sprintf("<p>No wells found for %s. Make sure that's correct.</p>\n", paste(S$never_seen, collapse = ", ")))
+```
+
 # Summary
 
 ```{r summary, results = "asis"}
@@ -239,78 +250,55 @@ for (tt in S$contrasts$test) {
 
 # Dose-response
 
+Scored as in the scoring step: US subtracted from each well, negatives set to 0, then ln(x + 1). Dose 0 is the LPS-only well.
+
 ```{r dose_response, results = "asis", fig.height = 3.8, fig.width = 10}
 ds <- qa$dose
-if (!length(S$dose_series) || !nrow(ds)) {
+di <- qa$dose_issues
+dp <- qa$dose_points
+stim_issue <- !sm$issue %in% c(file_issues, "no dose-response")
+tagged_above <- unique(sm$participant[stim_issue])
+if (!length(S$dose_series) || !length(ds) || !nrow(ds)) {
   none("None found.")
 } else {
   for (nm in names(S$dose_series)) {
-    s <- S$dose_series[[nm]]
-    doses <- names(sort(s$doses))
-    earlier <- unique(sm$participant[!sm$issue %in% c("no dose-response", "plate", "set-up")])
-    nd <- sm[sm$issue == "no dose-response" & !sm$participant %in% earlier, ]
-    items <- unlist(lapply(seq_len(nrow(nd)), function(i) {
-      parts <- strsplit(nd$detail[i], "; ")[[1]]
-      parts <- parts[startsWith(parts, paste0(nm, ": "))]
-      stats::setNames(sub(paste0("^", nm, ": "), "", parts), rep(nd$participant[i], length(parts)))
-    }))
     cat("\n\n## ", nm, "\n\n", sep = "")
-    if (!length(items)) { none("None found."); next }
-    ids <- unique(names(items))
-    ids <- ids[order(idnum(ids), ids)]
-    cat("<ul>", paste0("<li><b>", ids, "</b>: ", vapply(ids, function(i) htmltools::htmlEscape(paste(items[names(items) == i], collapse = "; ")), ""),
-                       "</li>", collapse = ""), "</ul>\n", sep = "")
-
-    # plot: LPS-only (0 cortisol / IL-10) then lowest -> highest dose, natural-log raw values
-    xs <- c(s$reference, doses)
-    v <- qa$values[qa$values$condition %in% xs & !is.na(qa$values$value) & qa$values$value > 0,
-                   c("id_num", "condition", "analyte", "value")]
-    v$x <- factor(v$condition, levels = xs)
-    v$y <- log(v$value)
+    d_nm <- di[di$series == nm, ]
+    ids <- unique(d_nm$id_num)
+    v <- dp[dp$series == nm & !is.na(dp$score), ]
+    if (!nrow(v)) { none("None found."); next }
+    steps <- unique(dp[dp$series == nm, c("step", "condition")])
+    steps <- steps[order(steps$step), ]
     v$hl <- v$id_num %in% ids
-    v <- v[order(v$x), ]
+    v <- v[order(v$step), ]
     last <- v[v$hl, ]
     last <- last[!duplicated(paste(last$id_num, last$analyte), fromLast = TRUE), ]
     if (nrow(last)) for (a in unique(last$analyte)) {      # nudge labels apart
-      i <- which(last$analyte == a); y <- last$y[i]; gap <- 0.06 * diff(range(v$y))
+      i <- which(last$analyte == a); y <- last$score[i]; gap <- 0.06 * diff(range(v$score))
       o <- order(y); ys <- y[o]
       for (k in seq_along(ys)[-1]) if (ys[k] - ys[k - 1] < gap) ys[k] <- ys[k - 1] + gap
-      y[o] <- ys; last$y[i] <- y
+      y[o] <- ys; last$score[i] <- y
     }
     show_plot(
-      ggplot(v, aes(x, y, group = id_num)) +
+      ggplot(v, aes(step, score, group = id_num)) +
         geom_line(data = v[!v$hl, ], colour = context_grey, linewidth = 0.45, alpha = 0.8) +
         geom_line(data = v[v$hl, ], colour = flag_col, linewidth = 0.9) +
         geom_point(data = v[v$hl, ], colour = flag_col, size = 1.8) +
         geom_text(data = last, aes(label = id_num), colour = flag_col, size = 3, hjust = -0.3) +
-        scale_x_discrete(drop = FALSE, expand = expansion(add = c(0.3, 0.7))) +
+        scale_x_continuous(breaks = steps$step, labels = paste0(steps$step, "\n", steps$condition),
+                           expand = expansion(add = c(0.3, 1.1))) +
         facet_wrap(~ analyte, nrow = 1) +
-        labs(x = NULL, y = paste0("ln(", S$measure, ")")))
+        labs(x = "dose", y = "ln(MFI - US + 1)"))
+    if (!length(ids)) { none("None found."); next }
+    d_nm <- d_nm[order(idnum(d_nm$id_num), d_nm$id_num), ]
+    cat("\n\n<p><b>Already tagged in Stimulation &amp; inhibition order</b></p>\n")
+    t1 <- d_nm[d_nm$id_num %in% tagged_above, c("id_num", "text")]
+    tbl(t1, col.names = c("id", "dose-response issue"))
+    cat("\n\n<p><b>Not tagged above</b></p>\n")
+    t2 <- d_nm[!d_nm$id_num %in% tagged_above, c("id_num", "text")]
+    tbl(t2, col.names = c("id", "dose-response issue"))
     cat("\n\n")
   }
-}
-```
-
-# Plates
-
-Please inspect to see if a plate is behaving differently.
-
-```{r plates_plot, fig.height = 0.62 * qa$counts$plates + 1.8, fig.width = 10}
-v <- qa$long[!is.na(qa$long$value) & qa$long$value > 0 & qa$long$condition %in% c("us", "lps"), ]
-ps <- qa$plates$summary
-if (nrow(v) && length(ps) && nrow(ps)) {
-  v$plate_s <- short_plate(v$plate)
-  v$shifted <- v$plate %in% ps$plate[ps$plate_flag != ""]
-  v$condition <- factor(v$condition, levels = c("us", "lps"))
-  v$plate_s <- factor(v$plate_s, levels = rev(sort(unique(v$plate_s))))
-  show_plot(
-    ggplot(v, aes(value, plate_s, colour = shifted)) +
-      geom_point(size = 1.6, alpha = 0.75, position = position_jitter(height = 0.15, seed = 1)) +
-      stat_summary(fun = stats::median, geom = "point", shape = 124, size = 6, colour = ink) +
-      scale_colour_manual(values = c(`FALSE` = "#86b6ef", `TRUE` = flag_col), labels = c("typical", "shifted plate"), name = NULL) +
-      scale_x_log10(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +
-      facet_grid(condition ~ analyte) +
-      labs(x = paste(S$measure, "(log scale) - black tick = plate median"), y = NULL))
 }
 ```
 
@@ -330,10 +318,11 @@ panel <- function(p, issues, details) {
                      htmltools::htmlEscape(details), "</li>", collapse = ""), "</ul>\n", sep = "")
   if (!nrow(v)) return(invisible())
   lv <- c(cond_order, setdiff(unique(v$condition), cond_order))
-  pv <- merge(expand.grid(condition = lv, analyte = an, stringsAsFactors = FALSE),
-              v[, c("condition", "analyte", "value")], all.x = TRUE)
+  lv_plot <- setdiff(lv, "us")              # US stays in the table, not the chart
+  pv <- merge(expand.grid(condition = lv_plot, analyte = an, stringsAsFactors = FALSE),
+              v[v$condition != "us", c("condition", "analyte", "value")], all.x = TRUE)
   pv$value[!is.na(pv$value) & pv$value <= 0] <- NA
-  pv$condition <- factor(pv$condition, levels = lv)
+  pv$condition <- factor(pv$condition, levels = lv_plot)
   pv <- pv[order(pv$analyte, pv$condition), ]
   if (any(!is.na(pv$value))) {
     show_plot(

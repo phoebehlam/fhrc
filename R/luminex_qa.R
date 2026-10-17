@@ -109,6 +109,8 @@ luminex_dose_series <- function(il10 = FALSE) {
 #' @param tolerance Percent. A comparison is flagged only when the expected
 #'   higher well is more than `tolerance`\% below the other. Default 0 (any
 #'   reversal), matching the original script.
+#' @param dip_pct Percent. In the dose-response check, a scored value that
+#'   rises by more than this from one dose to the next is listed (default 25).
 #' @param study,visit Labels for the report. Default: taken from the ids.
 #' @return An object of class `luminex_qa` (a list of data frames).
 #' @examples
@@ -130,6 +132,7 @@ luminex_qa <- function(data,
                        measure = "avg_mfi",
                        cv_threshold = 10,
                        tolerance = 0,
+                       dip_pct = 25,
                        study = NULL,
                        visit = NULL) {
 
@@ -204,7 +207,8 @@ luminex_qa <- function(data,
   vals <- orig[!duplicated(orig[, c("id_num", "condition", "analyte")]), , drop = FALSE]
   missing <- .lqa_missing(vals, expected_conditions, analytes, expected_ids)
   cmp <- .lqa_contrasts(vals, contrasts, tolerance, cv_threshold, extra)
-  dose <- .lqa_dose(vals, dose_series)
+  dose_all <- .lqa_dose(vals, dose_series, dip_pct)
+  dose <- dose_all$summary
   patterns <- .lqa_patterns(vals, cmp, contrasts, dose_series, analytes)
   plates <- .lqa_plates(orig, cmp)
 
@@ -222,7 +226,8 @@ luminex_qa <- function(data,
                   plates = length(unique(stats::na.omit(raw$plate))), extra_rows = nrow(extra)),
     data = raw, long = orig, values = vals, extra_rows = extra,
     integrity = integrity, missing = missing,
-    contrasts = cmp, dose = dose, patterns = patterns, plates = plates
+    contrasts = cmp, dose = dose, dose_points = dose_all$points, dose_issues = .lqa_dose_issues(dose),
+    patterns = patterns, plates = plates
   )
   out$summary <- .lqa_summary(out)
   out$low_dose <- .lqa_low_dose(out)
@@ -403,48 +408,90 @@ print.luminex_qa <- function(x, ...) {
   sum((x - mean(x)) * (ly - mean(ly))) / sum((x - mean(x))^2)
 }
 
-.lqa_dose <- function(vals, dose_series) {
+# Dose-response scored the way the scoring step does it: each well minus the
+# participant's US well, negatives set to 0, then ln(x + 1); dose 0 = the
+# reference (LPS-only) well, then 1, 2, ... from the lowest to the highest dose.
+.lqa_dose_points <- function(vals, dose_series) {
   if (!length(dose_series)) return(data.frame())
   key <- paste(vals$id_num, vals$condition, vals$analyte)
-  people <- unique(vals[, c("id_num", "plate")])
-  people <- people[!duplicated(people$id_num), ]
-  res <- list()
+  people <- unique(vals$id_num)
+  out <- list()
   for (nm in names(dose_series)) {
     s <- dose_series[[nm]]
-    doses <- sort(s$doses)
+    conds <- c(s$reference, names(sort(s$doses)))
     for (a in unique(vals$analyte)) {
-      for (j in seq_len(nrow(people))) {
-        p <- people$id_num[j]
-        y <- vals$value[match(paste(p, names(doses), a), key)]
-        ref <- vals$value[match(paste(p, s$reference, a), key)]
-        n_ok <- sum(!is.na(y) & y > 0)
-        slope <- .lqa_slope(unname(doses), y)
-        rho <- if (n_ok >= 3) suppressWarnings(stats::cor(unname(doses)[!is.na(y)], y[!is.na(y)],
-                                                          method = "spearman")) else NA_real_
-        dy <- diff(y)
-        res[[length(res) + 1]] <- data.frame(
-          id_num = p, plate = people$plate[j], series = nm, analyte = a,
-          n_doses = n_ok, reference_value = ref,
-          slope = slope, spearman = rho,
-          increases = sum(dy > 0, na.rm = TRUE),
-          suppression_top_pct = 100 * (1 - y[length(y)] / ref),
-          values = paste(round(y), collapse = " / "),
-          stringsAsFactors = FALSE)
+      us <- vals$value[match(paste(people, "us", a), key)]
+      for (k in seq_along(conds)) {
+        raw <- vals$value[match(paste(people, conds[k], a), key)]
+        sub <- pmax(raw - us, 0)
+        out[[length(out) + 1]] <- data.frame(id_num = people, series = nm, analyte = a, step = k - 1,
+                                             condition = conds[k], score = log(sub + 1),
+                                             stringsAsFactors = FALSE)
       }
     }
   }
+  do.call(rbind, out)
+}
+
+# one line of text per participant x series with a dose-response issue
+.lqa_dose_issues <- function(ds) {
+  empty <- data.frame(id_num = character(0), series = character(0), text = character(0), stringsAsFactors = FALSE)
+  if (!length(ds) || !nrow(ds)) return(empty)
+  out <- list()
+  for (p in unique(ds$id_num[ds$issue])) {
+    for (nm in unique(ds$series[ds$id_num == p & ds$issue])) {
+      r <- ds[ds$id_num == p & ds$series == nm, ]
+      parts <- character(0)
+      flat <- r$analyte[r$no_decrease | r$flat_vs_cohort]
+      if (length(flat)) parts <- c(parts, paste0("no substantive decrease with dose in ", paste(flat, collapse = ", ")))
+      up <- r[r$goes_up != "", ]
+      if (nrow(up)) {
+        steps <- unlist(strsplit(up$goes_up, ", "))
+        an_of <- rep(up$analyte, lengths(strsplit(up$goes_up, ", ")))
+        for (st in unique(steps))
+          parts <- c(parts, paste0("goes up from ", st, " (", paste(an_of[steps == st], collapse = ", "), ")"))
+      }
+      out[[length(out) + 1]] <- data.frame(id_num = p, series = nm, text = paste(parts, collapse = "; "),
+                                           stringsAsFactors = FALSE)
+    }
+  }
+  if (!length(out)) return(empty)
+  do.call(rbind, out)
+}
+
+.lqa_dose <- function(vals, dose_series, dip_pct = 25) {
+  pts <- .lqa_dose_points(vals, dose_series)
+  if (!nrow(pts)) return(list(points = pts, summary = data.frame()))
+  rise <- log(1 + dip_pct / 100)
+  plate <- unique(vals[, c("id_num", "plate")]); plate <- plate[!duplicated(plate$id_num), ]
+  grp <- split(pts, list(pts$id_num, pts$series, pts$analyte), drop = TRUE)
+  res <- lapply(grp, function(g) {
+    g <- g[order(g$step), ]
+    ok <- !is.na(g$score)
+    slope <- if (sum(ok) >= 3) {
+      x <- g$step[ok]; y <- g$score[ok]
+      sum((x - mean(x)) * (y - mean(y))) / sum((x - mean(x))^2)
+    } else NA_real_
+    # any step where the scored value goes UP from one dose to the next
+    ups <- character(0)
+    for (k in seq_len(nrow(g) - 1)) {
+      if (!is.na(g$score[k]) && !is.na(g$score[k + 1]) && g$score[k + 1] - g$score[k] > rise)
+        ups <- c(ups, paste0(g$condition[k], " to ", g$condition[k + 1]))
+    }
+    data.frame(id_num = g$id_num[1], series = g$series[1], analyte = g$analyte[1],
+               n_doses = sum(ok), slope = slope, goes_up = paste(ups, collapse = ", "),
+               stringsAsFactors = FALSE)
+  })
   d <- do.call(rbind, res)
-  d$flag <- ifelse(d$n_doses < 3, "too few doses for a slope",
-                   ifelse(!is.na(d$slope) & d$slope >= 0, "no inhibition (slope >= 0)", ""))
-  # inhibition at the top dose, compared with everyone else on the same series x cytokine
-  d$cohort_median_suppression <- stats::ave(d$suppression_top_pct, d$series, d$analyte,
-                                            FUN = function(x) stats::median(x[is.finite(x)]))
-  d$suppression_z <- stats::ave(d$suppression_top_pct, d$series, d$analyte, FUN = .lqa_robust_z)
-  d$weak_vs_cohort <- (d$suppression_z < -3 &
-                         d$suppression_top_pct < d$cohort_median_suppression / 2) %in% TRUE
-  d$series_conds <- vapply(d$series, function(nm)
-    paste(c(dose_series[[nm]]$reference, names(dose_series[[nm]]$doses)), collapse = ","), "")
-  d
+  rownames(d) <- NULL
+  d$plate <- plate$plate[match(d$id_num, plate$id_num)]
+  d$no_decrease <- (d$slope >= 0) %in% TRUE
+  # much flatter than the rest of the cohort
+  d$cohort_median_slope <- stats::ave(d$slope, d$series, d$analyte, FUN = function(x) stats::median(x[is.finite(x)]))
+  d$slope_z <- stats::ave(d$slope, d$series, d$analyte, FUN = .lqa_robust_z)
+  d$flat_vs_cohort <- (d$slope_z > 3 & d$slope > d$cohort_median_slope / 2) %in% TRUE
+  d$issue <- d$no_decrease | d$flat_vs_cohort | d$goes_up != ""
+  list(points = pts, summary = d[order(.lqa_idnum(d$id_num), d$id_num, d$series, d$analyte), ])
 }
 
 # count "core" violations for one participant's condition x analyte matrix
@@ -614,14 +661,6 @@ print.luminex_qa <- function(x, ...) {
     }
   }
 
-  # -- set-up ----------------------------------------------------------------
-  if (length(S$switched_off)) {
-    opts <- unique(ifelse(grepl("^il10", S$switched_off), "il10", S$switched_off))
-    add("(file)", "set-up", paste0(paste(S$switched_off, collapse = ", "), " wells not checked (",
-                                   paste0(opts, " = FALSE", collapse = ", "), ")"))
-  }
-  if (length(S$never_seen)) add("(file)", "set-up", paste0("no wells found for ", paste(S$never_seen, collapse = ", ")))
-
   # -- data entry ------------------------------------------------------------
   ig <- x$integrity
   if (nrow(ig$unparsed)) add("(row)", "unreadable id", paste0("'", ig$unparsed$id, "' (excel row ", ig$unparsed$excel_row, ")"),
@@ -693,35 +732,16 @@ print.luminex_qa <- function(x, ...) {
   }
   add_joined(bp_id, bp_txt, bp_issue)
 
-  # -- dose response ---------------------------------------------------------
-  ds <- x$dose
-  if (nrow(ds)) {
-    # a missing or unstimulated reference well is not a dose-response problem
-    no_ref <- unique(c(x$missing$id_num[x$missing$condition %in% vapply(S$dose_series, `[[`, "", "reference")],
-                       pt$weak$id_num))
-    nd <- ds[(ds$flag == "no inhibition (slope >= 0)" | ds$weak_vs_cohort) & !ds$id_num %in% no_ref, ]
-    if (nrow(nd)) {
-      g <- stats::aggregate(analyte ~ id_num + series, nd, function(z) paste(unique(z), collapse = ", "))
-      g <- g[order(.lqa_idnum(g$id_num)), ]
-      add_joined(g$id_num, paste0(g$series, ": no substantive decrease with dose in ", g$analyte),
-                 rep("no dose-response", nrow(g)))
-    }
-  }
-
-  # -- plates ----------------------------------------------------------------
-  ps <- x$plates$summary
-  if (length(ps) && nrow(ps)) {
-    pf <- ps[ps$plate_flag != "", ]
-    if (nrow(pf)) add("(plate)", "plate", ifelse(pf$fold < 1, "values lower than other plates",
-                                                 "values higher than other plates"), pf$plate)
-  }
+  # -- dose response (scored as in the scoring step) --------------------------
+  di <- x$dose_issues
+  if (length(di) && nrow(di)) add_joined(di$id_num, paste0(di$series, ": ", di$text), rep("no dose-response", nrow(di)))
 
   empty <- data.frame(participant = character(0), issue = character(0), detail = character(0),
                       plate = character(0), stringsAsFactors = FALSE)
   if (!length(rows)) return(empty)
   td <- do.call(rbind, rows)
   first <- c("set-up", "unreadable id", "different study prefix", "duplicated data", "unknown condition", "missing data")
-  last <- c("no dose-response", "plate")
+  last <- c("no dose-response")
   rank <- ifelse(td$issue %in% first, match(td$issue, first),
                  ifelse(td$issue %in% last, 100 + match(td$issue, last), 50))
   grp <- ifelse(td$participant == "(file)", 0, ifelse(td$participant %in% c("(row)", "(plate)"), 2, 1))
