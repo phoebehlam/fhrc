@@ -16,6 +16,7 @@
 #'   \item{1023}{LPS-only well reads low, so the cortisol wells read more than 2x LPS}
 #'   \item{1027}{small IL-1b reversal (hsp60 slightly below US), within noise}
 #'   \item{1035}{TNF-a value missing for the r848 well}
+#'   \item{1039}{crt_6.5 well reads far too low (a dip in the cortisol curve)}
 #'   \item{1043}{crt_5.5 and crt_7 labels swapped (shows as a dip at crt_7)}
 #'   \item{1044-1046}{US and LPS wells swapped for three participants next to
 #'     each other on plate 12 (listed under Plates)}
@@ -88,6 +89,8 @@ luminex_example <- function(file = NULL, n = 48, study = "MHS", il10 = FALSE, re
   long <- swap(long, 1003, "us", "r848")
   long <- swap(long, 1043, "crt_5.5", "crt_7")
   for (idn in 1044:1046) long <- swap(long, idn, "us", "lps")
+  sel <- long$id_num == 1039 & long$condition == "crt_6.5"
+  long$mfi[sel] <- long$mfi[sel] * 0.08
   sel <- long$id_num == 1007 & long$condition == "lps"
   us7 <- long$mfi[long$id_num == 1007 & long$condition == "us"]
   long$mfi[sel] <- us7 * stats::runif(3, 0.9, 1.3)

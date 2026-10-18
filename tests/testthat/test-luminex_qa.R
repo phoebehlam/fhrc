@@ -69,7 +69,7 @@ test_that("summary states problems only: no percentages, guesses or attributions
 })
 
 test_that("no unplanted participant gets a data, bench-error or dose-response row", {
-  planted <- c("1003", "1007", "1011", "1015", "1019", "1023", "1035", "1043", "1044", "1045", "1046")
+  planted <- c("1003", "1007", "1011", "1015", "1019", "1023", "1035", "1039", "1043", "1044", "1045", "1046")
   serious <- sm$issue %in% c("duplicated data", "unknown condition", "missing data", "us > r848", "us > lps",
                              "crt > 2x lps", "il10 > 2x lps", "dose-response dip/spike")
   got <- unique(sm$participant[serious & grepl("^[0-9]+$", sm$participant)])
