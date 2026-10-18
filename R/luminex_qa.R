@@ -445,7 +445,7 @@ print.luminex_qa <- function(x, ...) {
       r <- ds[ds$id_num == p & ds$series == nm, ]
       parts <- character(0)
       flat <- r$analyte[r$no_decrease]
-      if (length(flat)) parts <- c(parts, paste0("slope is 0 or positive in ", paste(flat, collapse = ", ")))
+      if (length(flat)) parts <- c(parts, paste0("slope is positive in ", paste(flat, collapse = ", ")))
       od <- r[r$odd != "", ]
       if (nrow(od)) {
         ev <- unlist(strsplit(od$odd, ", "))
@@ -487,7 +487,7 @@ print.luminex_qa <- function(x, ...) {
   d <- do.call(rbind, res)
   rownames(d) <- NULL
   d$plate <- plate$plate[match(d$id_num, plate$id_num)]
-  d$no_decrease <- (d$slope >= 0) %in% TRUE
+  d$no_decrease <- (d$slope > 0) %in% TRUE          # a positive slope; 0 is not a problem
   d$issue <- d$no_decrease | d$odd != ""
   list(points = pts, summary = d[order(.lqa_idnum(d$id_num), d$id_num, d$series, d$analyte), ])
 }

@@ -236,7 +236,7 @@ slope_plot <- function(d) {
 ## By comparison {.tabset .tabset-pills}
 
 ```{r slopes, results = "asis", fig.height = 3.6, fig.width = 10}
-for (tt in S$contrasts$test) {
+for (tt in setdiff(S$contrasts$test, S$contrasts$test[S$contrasts$lower == "crt_7"])) {
   d <- cmp[cmp$test == tt, ]
   nf <- length(unique(d$id_num[d$flag]))
   cat("\n\n### ", tt, if (nf) paste0(" (", nf, ")"), "\n\n", sep = "")
@@ -250,7 +250,7 @@ for (tt in S$contrasts$test) {
 
 Scored as in the scoring step: US subtracted from each well, negatives set to 0, then ln(x + 1). Dose 0 is the LPS-only well.
 
-Only participants who are not already tagged in Stimulation & inhibition order are listed and drawn in red here. A participant is tagged when the slope across doses is 0 or positive, or when one well dips far below (or spikes far above) both of its neighbouring doses.
+Only participants who are not already tagged in Stimulation & inhibition order are listed and drawn in red here. A participant is tagged when the slope across doses is positive, or when one well dips far below (or spikes far above) both of its neighbouring doses.
 
 ```{r dose_response, results = "asis", fig.height = 3.8, fig.width = 10}
 ds <- qa$dose
@@ -313,23 +313,21 @@ panel <- function(p, issues, details) {
                      htmltools::htmlEscape(details), "</li>", collapse = ""), "</ul>\n", sep = "")
   if (!nrow(v)) return(invisible())
   lv <- c(cond_order, setdiff(unique(v$condition), cond_order))
-  lv_plot <- setdiff(lv, "us")              # US stays in the table, not the chart
-  us_v <- v[v$condition == "us", c("analyte", "value")]
-  sub <- v[v$condition != "us", c("condition", "analyte", "value")]
-  sub$value <- sub$value - us_v$value[match(sub$analyte, us_v$analyte)]   # well minus US; negatives kept
-  pv <- merge(expand.grid(condition = lv_plot, analyte = an, stringsAsFactors = FALSE), sub, all.x = TRUE)
+  lv_plot <- lv
+  pv <- merge(expand.grid(condition = lv_plot, analyte = an, stringsAsFactors = FALSE),
+              v[, c("condition", "analyte", "mfi")], all.x = TRUE)
+  names(pv)[names(pv) == "mfi"] <- "value"
   pv$condition <- factor(pv$condition, levels = lv_plot)
   pv <- pv[order(pv$analyte, pv$condition), ]
   if (any(!is.na(pv$value))) {
     show_plot(
       ggplot(pv, aes(condition, value, colour = analyte, group = analyte)) +
-        geom_hline(yintercept = 0, colour = muted, linewidth = 0.5) +
         geom_line(linewidth = 0.8) +
         geom_point(size = 2.4, stroke = 0.6, shape = 21, fill = surface) +
         scale_colour_manual(values = analyte_cols, name = NULL) +
         scale_x_discrete(drop = FALSE) +
         scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +
-        labs(x = NULL, y = "MFI minus US (MFI units)"))
+        labs(x = NULL, y = "MFI"))
   } else cat("<p class='note'>No values for this participant.</p>\n")
   conds <- unique(v$condition)
   conds <- conds[order(match(conds, lv))]

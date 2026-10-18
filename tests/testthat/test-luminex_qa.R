@@ -45,7 +45,7 @@ test_that("data entry and missing data problems are stated plainly", {
 })
 
 test_that("dose-response and pattern problems are found; no plate rows", {
-  expect_true(has("1023", "no dose-response", "cortisol: slope is 0 or positive in"))
+  expect_true(has("1023", "no dose-response", "cortisol: slope is positive in"))
   expect_true(has("1027", "us > hsp60", "il1b"))
   expect_false(any(sm$issue == "plate"))
 })
@@ -97,7 +97,7 @@ test_that("dose-response is scored like the scoring step and catches flat lines 
   expect_equal(dp$condition[dp$id_num == "1005" & dp$series == "cortisol" & dp$analyte == "il6"],
                c("lps", "crt_7", "crt_6.5", "crt_6", "crt_5.5"))
   # planted problems
-  expect_true(has("1023", "no dose-response", "cortisol: slope is 0 or positive in"))
+  expect_true(has("1023", "no dose-response", "cortisol: slope is positive in"))
   expect_false(any(grepl("no substantive|goes up", sm$detail)))
   dip_test <- function(cond, analyte = "il1b") {
     d <- luminex_example(study = "OTR", il10 = TRUE)
@@ -211,4 +211,18 @@ test_that("cortisol and IL-10 wells above LPS are one category each in the summa
   expect_true(any(q$summary$participant == "1012" & q$summary$issue == "crt > lps" &
                     grepl("crt_6 (", q$summary$detail, fixed = TRUE)))
   expect_false(any(grepl("[A-Z]", q$summary$issue)))      # all lower case
+})
+
+test_that("a slope of exactly 0 is not tagged; a positive slope is", {
+  d <- luminex_example(study = "OTR")
+  # participant 1010: every cortisol well equal to the LPS well -> slope exactly 0
+  for (cnd in c("crt_7", "crt_6.5", "crt_6", "crt_5.5")) for (a in c("il1b", "il6", "tnfa")) {
+    col <- paste0(a, "_avg_mfi")
+    d[[col]][d$id == paste0("OTR_1010_V1_", cnd)] <- d[[col]][d$id == "OTR_1010_V1_lps"]
+  }
+  q <- luminex_qa(d)
+  s0 <- q$dose[q$dose$id_num == "1010" & q$dose$series == "cortisol", ]
+  expect_true(all(abs(s0$slope) < 1e-12))
+  expect_false(any(s0$no_decrease))
+  expect_true(any(q$dose$no_decrease[q$dose$id_num == "1023"]))
 })
