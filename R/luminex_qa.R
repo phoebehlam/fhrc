@@ -624,6 +624,31 @@ print.luminex_qa <- function(x, ...) {
 .lqa_file_issues <- c("set-up", "unreadable id", "duplicated data", "unknown condition",
                       "different study prefix", "missing data", "plate")
 
+# the low-dose wells (crt_7, crt_6.5, lowest IL-10): lower well of the "sensitive" checks
+.lqa_low_wells <- function(x) unique(x$settings$contrasts$lower[x$settings$contrasts$tier == "sensitive"])
+
+# pairs of wells in the wrong order, as "<reads higher> > <reads lower>" plus the cytokines where that holds
+.lqa_swap_items <- function(x) {
+  pt <- x$patterns
+  out <- data.frame(id_num = character(0), test = character(0), cytokines = character(0), stringsAsFactors = FALSE)
+  if (!nrow(pt$swaps)) return(out)
+  for (i in seq_len(nrow(pt$swaps))) {
+    p <- pt$swaps$id_num[i]
+    pair <- strsplit(pt$swaps$conds[i], ",")[[1]]
+    v <- x$values[x$values$id_num == p & x$values$condition %in% pair & !is.na(x$values$value) & x$values$value > 0, ]
+    mlog <- tapply(log(v$value), v$condition, mean)
+    if (length(mlog) < 2) next          # values at or below 0: no way to say which reads higher
+    hi <- names(which.max(mlog)); lo <- setdiff(pair, hi)
+    vh <- v[v$condition == hi, ]; vl <- v[v$condition == lo, ]
+    cyt <- intersect(vh$analyte, vl$analyte)
+    cyt <- cyt[vh$value[match(cyt, vh$analyte)] > vl$value[match(cyt, vl$analyte)]]
+    if (!length(cyt)) next
+    out <- rbind(out, data.frame(id_num = p, test = paste0(hi, " > ", lo), cytokines = paste(cyt, collapse = ", "),
+                                 stringsAsFactors = FALSE))
+  }
+  out
+}
+
 .lqa_summary <- function(x) {
   S <- x$settings
   rows <- list()
@@ -699,19 +724,14 @@ print.luminex_qa <- function(x, ...) {
       }
     }
   }
-  # two wells whose values look exchanged
-  if (nrow(pt$swaps)) for (i in seq_len(nrow(pt$swaps))) {
-    p <- pt$swaps$id_num[i]
-    pair <- strsplit(pt$swaps$conds[i], ",")[[1]]
-    v <- x$values[x$values$id_num == p & x$values$condition %in% pair & !is.na(x$values$value) & x$values$value > 0, ]
-    mlog <- tapply(log(v$value), v$condition, mean)
-    if (length(mlog) < 2) next          # values at or below 0: no way to say which reads higher
-    hi <- names(which.max(mlog)); lo <- setdiff(pair, hi)
-    tt <- paste0(hi, " > ", lo)
+  # two wells in the wrong order not covered by a check above (those involving a low-dose well are listed with the low-dose wells)
+  sw <- .lqa_swap_items(x)
+  low <- .lqa_low_wells(x)
+  sw <- sw[!vapply(strsplit(sw$test, " > "), function(z) any(z %in% low), TRUE), , drop = FALSE]
+  for (i in seq_len(nrow(sw))) {
+    p <- sw$id_num[i]; tt <- sw$test[i]
     k <- which(bp_id == p & bp_issue == tt)
-    if (length(k)) bp_txt[k] <- paste0(bp_txt[k], ", label swap?") else {
-      bp_id <- c(bp_id, p); bp_issue <- c(bp_issue, tt); bp_txt <- c(bp_txt, "label swap?")
-    }
+    if (!length(k)) { bp_id <- c(bp_id, p); bp_issue <- c(bp_issue, tt); bp_txt <- c(bp_txt, sw$cytokines[i]) }
   }
   add_joined(bp_id, bp_txt, bp_issue)
 
@@ -739,11 +759,29 @@ print.luminex_qa <- function(x, ...) {
   cc <- x$contrasts
   empty <- data.frame(participant = character(0), test = character(0), cytokines = character(0),
                       plate = character(0), stringsAsFactors = FALSE)
-  if (!nrow(cc)) return(empty)
-  f <- cc[cc$flag & cc$tier == "sensitive", ]
-  if (!nrow(f)) return(empty)
-  g <- stats::aggregate(analyte ~ id_num + test + plate, f, function(z) paste(z, collapse = ", "))
-  g <- g[order(.lqa_idnum(g$id_num), g$id_num, match(g$test, x$settings$contrasts$test)), ]
-  data.frame(participant = g$id_num, test = g$test, cytokines = g$analyte, plate = g$plate,
-             stringsAsFactors = FALSE, row.names = NULL)
+  rows <- empty
+  if (nrow(cc)) {
+    f <- cc[cc$flag & cc$tier == "sensitive", ]
+    if (nrow(f)) {
+      g <- stats::aggregate(analyte ~ id_num + test + plate, f, function(z) paste(z, collapse = ", "))
+      rows <- data.frame(participant = g$id_num, test = g$test, cytokines = g$analyte, plate = g$plate,
+                         stringsAsFactors = FALSE)
+    }
+  }
+  # wells in the wrong order that involve a low-dose well
+  sw <- .lqa_swap_items(x)
+  low <- .lqa_low_wells(x)
+  sw <- sw[vapply(strsplit(sw$test, " > "), function(z) any(z %in% low), TRUE), , drop = FALSE]
+  pl <- unique(x$long[, c("id_num", "plate")])
+  for (i in seq_len(nrow(sw))) {
+    k <- which(rows$participant == sw$id_num[i] & rows$test == sw$test[i])
+    if (!length(k))
+      rows <- rbind(rows, data.frame(participant = sw$id_num[i], test = sw$test[i], cytokines = sw$cytokines[i],
+                                     plate = pl$plate[match(sw$id_num[i], pl$id_num)], stringsAsFactors = FALSE))
+  }
+  if (!nrow(rows)) return(empty)
+  ord <- match(rows$test, x$settings$contrasts$test); ord[is.na(ord)] <- 0
+  rows <- rows[order(.lqa_idnum(rows$participant), rows$participant, ord), ]
+  rownames(rows) <- NULL
+  rows
 }

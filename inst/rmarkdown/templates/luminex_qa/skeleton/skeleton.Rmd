@@ -145,15 +145,13 @@ if (!nrow(sm)) {
 ## Low-dose wells
 
 ```{r low_dose_counts, results = "asis"}
-sens <- S$contrasts[S$contrasts$tier == "sensitive", ]
-cmp_all <- qa$contrasts
-if (!nrow(sens) || !nrow(cmp_all)) none("None found.") else {
-  ct <- sapply(an, function(a) sapply(sens$test, function(t) sum(cmp_all$flag[cmp_all$test == t & cmp_all$analyte == a])))
-  ct <- matrix(ct, nrow = nrow(sens), dimnames = list(sens$test, an))
-  any_n <- sapply(sens$test, function(t) length(unique(cmp_all$id_num[cmp_all$test == t & cmp_all$flag])))
-  tbl(data.frame(check = sens$test, as.data.frame(ct, check.names = FALSE), `any cytokine` = any_n,
-                 check.names = FALSE, stringsAsFactors = FALSE))
-  cat("<p class='note'>Number of participants. These participants are listed under <b>Just in case</b>.</p>\n")
+if (!nrow(ld)) none("None found.") else {
+  iss <- unique(ld$test)
+  ord <- match(iss, S$contrasts$test); ord[is.na(ord)] <- 0
+  iss <- iss[order(ord)]
+  tbl(data.frame(issue = iss, participants = vapply(iss, function(i) length(unique(ld$participant[ld$test == i])), 1L),
+                 stringsAsFactors = FALSE))
+  cat("<p class='note'>These participants are listed under <b>Just in case</b>.</p>\n")
 }
 ```
 

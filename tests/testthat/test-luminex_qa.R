@@ -19,10 +19,13 @@ test_that("ids are parsed: any study letters, 3-4 digit ids, repeat / interassay
   expect_equal(qa$counts$extra_rows, 12)
 })
 
-test_that("planted label swaps are stated as the broken pattern plus 'label swap?'", {
-  expect_true(has("1003", "us > r848", "label swap?"))
+test_that("planted swapped wells are stated as the broken order only", {
+  expect_true(has("1003", "us > r848", "il1b, il6, tnfa"))
   expect_true(has("1003", "us > hsp60", "il1b, il6, tnfa"))
-  expect_true(has("1043", "crt_5.5 > crt_7", "label swap?"))
+  # a swap that involves a low-dose well is listed with the low-dose wells, not in the summary
+  expect_true(any(qa$low_dose$participant == "1043" & qa$low_dose$test == "crt_5.5 > crt_7" &
+                    qa$low_dose$cytokines == "il1b, il6, tnfa"))
+  expect_false(any(sm$issue == "crt_5.5 > crt_7"))
 })
 
 test_that("missing stimulant is stated, not mistaken for a swap", {
@@ -30,7 +33,7 @@ test_that("missing stimulant is stated, not mistaken for a swap", {
   expect_false(any(grepl("stimulant missing|low lps", c(sm$issue, sm$detail))))
   expect_true(has("1007", "crt > lps", "crt_5.5 (il1b, il6, tnfa)"))
   expect_true(has("1007", "il10 > lps", "il10_.5 (il1b, il6, tnfa)"))
-  expect_false(any(sm$participant == "1007" & grepl("label swap", sm$detail)))
+  expect_false(any(grepl("swap", c(sm$detail, qa$low_dose$cytokines))))
 })
 
 test_that("data entry and missing data problems are stated plainly", {
@@ -49,14 +52,14 @@ test_that("dose-response and pattern problems are found; no plate rows", {
 
 test_that("summary states problems only: no percentages, guesses or attributions", {
   expect_false(any(grepl("%", sm$detail)))
-  expect_false(any(grepl("did you mean|explains|swapping|repeat run|noise|CV", sm$detail)))
+  expect_false(any(grepl("did you mean|explains|swap|repeat run|noise|CV|\\?", c(sm$detail, qa$low_dose$cytokines))))
   expect_false("priority" %in% names(sm))
 })
 
 test_that("no unplanted participant gets a data, bench-error or dose-response row", {
   planted <- c("1003", "1007", "1011", "1015", "1019", "1023", "1035", "1043")
   serious <- sm$issue %in% c("duplicated data", "unknown condition", "missing data") |
-    grepl("\\?|&", paste(sm$issue, sm$detail)) | (sm$issue == "no dose-response" & grepl("slope", sm$detail))
+    grepl("&", sm$issue) | (sm$issue == "us > r848") | (sm$issue == "no dose-response" & grepl("slope", sm$detail))
   got <- unique(sm$participant[serious & grepl("^[0-9]+$", sm$participant)])
   expect_setequal(got, planted)
 })
@@ -167,9 +170,10 @@ test_that("every reversal at the regular wells is in the summary; low-dose ones 
                 info = paste(core$id_num[i], core$test[i], core$analyte[i]))
   }
   low <- qa$contrasts[qa$contrasts$flag & qa$contrasts$tier == "sensitive", ]
-  expect_setequal(unique(qa$low_dose$participant), unique(low$id_num))
+  expect_true(all(unique(low$id_num) %in% qa$low_dose$participant))
   expect_false(any(grepl("crt_7|crt_6.5|il10_.02", sm$detail[sm$issue != "no dose-response"])))
-  expect_true(all(qa$low_dose$test %in% c("crt_7 > lps", "crt_6.5 > lps", "il10_.02 > lps")))
+  # every low-dose item involves a low-dose well
+  expect_true(all(grepl("crt_7|crt_6\\.5|il10_\\.02", qa$low_dose$test)))
 })
 
 test_that("messy real-world values do not crash any setting (zeros, negatives, blanks, text)", {
