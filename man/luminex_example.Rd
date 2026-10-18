@@ -48,7 +48,7 @@ Planted problems (participant id numbers):
   \item{1011}{crt_6 well missing}
   \item{1015}{hsp60 row entered twice}
   \item{1019}{lps typed as "lsp"}
-  \item{1023}{little cortisol inhibition (flat dose-response)}
+  \item{1023}{cytokine rises with cortisol dose (slope >= 0), never above LPS}
   \item{1027}{small IL-1b reversal (hsp60 slightly below US), within noise}
   \item{1035}{TNF-a value missing for the r848 well}
   \item{1043}{crt_5.5 and crt_7 labels swapped}

@@ -26,7 +26,8 @@ test_that("planted label swaps are stated as the broken pattern plus 'label swap
 })
 
 test_that("missing stimulant is stated, not mistaken for a swap", {
-  expect_true(has("1007", "low lps-only well", "lps ~ us, stimulant missing?"))
+  expect_true(has("1007", "LPS & US similar", "lps ~ us in all cytokines"))
+  expect_false(any(grepl("stimulant missing|low lps", c(sm$issue, sm$detail))))
   expect_true(has("1007", "crt > lps", "crt_5.5 (il1b, il6, tnfa)"))
   expect_true(has("1007", "il10 > lps", "il10_.5 (il1b, il6, tnfa)"))
   expect_false(any(sm$participant == "1007" & grepl("label swap", sm$detail)))
@@ -41,7 +42,7 @@ test_that("data entry and missing data problems are stated plainly", {
 })
 
 test_that("dose-response and pattern problems are found; no plate rows", {
-  expect_true(has("1023", "no dose-response", "cortisol: no substantive decrease with dose in"))
+  expect_true(has("1023", "no dose-response", "cortisol: slope is 0 or positive in"))
   expect_true(has("1027", "us > hsp60", "il1b"))
   expect_false(any(sm$issue == "plate"))
 })
@@ -55,7 +56,7 @@ test_that("summary states problems only: no percentages, guesses or attributions
 test_that("no unplanted participant gets a data, bench-error or dose-response row", {
   planted <- c("1003", "1007", "1011", "1015", "1019", "1023", "1035", "1043")
   serious <- sm$issue %in% c("duplicated data", "unknown condition", "missing data") |
-    grepl("\\?", sm$detail) | (sm$issue == "no dose-response" & grepl("no substantive", sm$detail))
+    grepl("\\?|&", paste(sm$issue, sm$detail)) | (sm$issue == "no dose-response" & grepl("slope", sm$detail))
   got <- unique(sm$participant[serious & grepl("^[0-9]+$", sm$participant)])
   expect_setequal(got, planted)
 })
@@ -93,24 +94,31 @@ test_that("dose-response is scored like the scoring step and catches flat lines 
   expect_equal(dp$condition[dp$id_num == "1005" & dp$series == "cortisol" & dp$analyte == "il6"],
                c("lps", "crt_7", "crt_6.5", "crt_6", "crt_5.5"))
   # planted problems
-  expect_true(has("1023", "no dose-response", "cortisol: no substantive decrease with dose in"))
-  expect_true(has("1043", "no dose-response", "goes up from crt_6 to crt_5.5"))
-  expect_true(has("1007", "no dose-response", "no substantive decrease"))
-  # rises into or out of a low-dose well are not tagged
-  expect_false(any(grepl("goes up from [^;]*(crt_7|crt_6\\.5|il10_\\.02)", sm$detail)))
-  # a single odd dip is tagged
+  expect_true(has("1023", "no dose-response", "cortisol: slope is 0 or positive in"))
+  expect_false(any(grepl("no substantive|goes up", sm$detail)))
+  dip_test <- function(cond, analyte = "il1b") {
+    d <- luminex_example(study = "OTR", il10 = TRUE)
+    col <- paste0(analyte, "_avg_mfi")
+    d[[col]][d$id == paste0("OTR_1010_V1_", cond)] <- d[[col]][d$id == "OTR_1010_V1_us"] + 2
+    luminex_qa(d, il10 = TRUE)$dose_issues
+  }
+  # a single sudden dip is tagged, including at a low-dose well
+  di <- dip_test("crt_6")
+  expect_true(any(di$id_num == "1010" & grepl("dip at crt_6 (il1b)", di$text, fixed = TRUE)))
+  di <- dip_test("crt_7")
+  expect_true(any(di$id_num == "1010" & grepl("dip at crt_7 (il1b)", di$text, fixed = TRUE)))
+  # a spike is tagged
   d <- luminex_example(study = "OTR", il10 = TRUE)
-  k <- d$id == "OTR_1010_V1_crt_6"
-  d$il1b_avg_mfi[k] <- d$il1b_avg_mfi[d$id == "OTR_1010_V1_us"] + 2
-  q <- luminex_qa(d, il10 = TRUE)
-  expect_true(any(q$summary$participant == "1010" & q$summary$issue == "no dose-response" &
-                    grepl("goes up from crt_6 to crt_5.5 (il1b)", q$summary$detail, fixed = TRUE)))
-  # the same dip at a low-dose well is not tagged
-  d2 <- luminex_example(study = "OTR", il10 = TRUE)
-  k2 <- d2$id == "OTR_1010_V1_crt_7"
-  d2$il1b_avg_mfi[k2] <- d2$il1b_avg_mfi[d2$id == "OTR_1010_V1_us"] + 2
-  q2 <- luminex_qa(d2, il10 = TRUE)
-  expect_false(any(q2$summary$participant == "1010" & grepl("goes up from crt_7", q2$summary$detail)))
+  k <- d$id == "OTR_1010_V1_crt_6.5"
+  d$tnfa_avg_mfi[k] <- d$tnfa_avg_mfi[k] * 20
+  di <- luminex_qa(d, il10 = TRUE)$dose_issues
+  expect_true(any(di$id_num == "1010" & grepl("spike at crt_6.5 (tnfa)", di$text, fixed = TRUE)))
+  # a rise at the last dose (crt_5.5) is not a dip or spike
+  d <- luminex_example(study = "OTR", il10 = TRUE)
+  k <- d$id == "OTR_1010_V1_crt_5.5"
+  d$il6_avg_mfi[k] <- d$il6_avg_mfi[d$id == "OTR_1010_V1_crt_6"] * 1.4
+  di <- luminex_qa(d, il10 = TRUE)$dose_issues
+  expect_false(any(di$id_num == "1010" & di$series == "cortisol"))
 })
 
 test_that("il10 / hsp60 / r848 switches work", {

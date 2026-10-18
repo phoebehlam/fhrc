@@ -17,7 +17,7 @@ luminex_qa(
   measure = "avg_mfi",
   cv_threshold = 10,
   tolerance = 0,
-  dip_pct = 25,
+  dip_size = 1,
   study = NULL,
   visit = NULL
 )
@@ -51,10 +51,10 @@ high CV in the flag details (default 10).}
 higher well is more than `tolerance`\% below the other. Default 0 (any
 reversal), matching the original script.}
 
-\item{dip_pct}{Percent. In the dose-response check, a scored value that
-rises by more than this from one dose to the next is listed (default 25).
-Rises into or out of a low-dose well (crt_7, crt_6.5, lowest IL-10) are
-not listed.}
+\item{dip_size}{In the dose-response check (values scored as
+ln(well - US + 1)), a well is listed as a dip or spike when it is more
+than this many units below or above BOTH neighbouring doses (default 1,
+i.e. under about 37\% / over about 2.7x of both neighbours).}
 
 \item{study, visit}{Labels for the report. Default: taken from the ids.}
 }

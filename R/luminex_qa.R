@@ -109,10 +109,10 @@ luminex_dose_series <- function(il10 = FALSE) {
 #' @param tolerance Percent. A comparison is flagged only when the expected
 #'   higher well is more than `tolerance`\% below the other. Default 0 (any
 #'   reversal), matching the original script.
-#' @param dip_pct Percent. In the dose-response check, a scored value that
-#'   rises by more than this from one dose to the next is listed (default 25).
-#'   Rises into or out of a low-dose well (crt_7, crt_6.5, lowest IL-10) are
-#'   not listed.
+#' @param dip_size In the dose-response check (values scored as
+#'   ln(well - US + 1)), a well is listed as a dip or spike when it is more
+#'   than this many units below or above BOTH neighbouring doses (default 1,
+#'   i.e. under about 37\% / over about 2.7x of both neighbours).
 #' @param study,visit Labels for the report. Default: taken from the ids.
 #' @return An object of class `luminex_qa` (a list of data frames).
 #' @examples
@@ -134,7 +134,7 @@ luminex_qa <- function(data,
                        measure = "avg_mfi",
                        cv_threshold = 10,
                        tolerance = 0,
-                       dip_pct = 25,
+                       dip_size = 1,
                        study = NULL,
                        visit = NULL) {
 
@@ -209,8 +209,7 @@ luminex_qa <- function(data,
   vals <- orig[!duplicated(orig[, c("id_num", "condition", "analyte")]), , drop = FALSE]
   missing <- .lqa_missing(vals, expected_conditions, analytes, expected_ids)
   cmp <- .lqa_contrasts(vals, contrasts, tolerance, cv_threshold, extra)
-  low_dose <- unique(contrasts$lower[contrasts$tier == "sensitive"])
-  dose_all <- .lqa_dose(vals, dose_series, dip_pct, low_dose)
+  dose_all <- .lqa_dose(vals, dose_series, dip_size)
   dose <- dose_all$summary
   patterns <- .lqa_patterns(vals, cmp, contrasts, dose_series, analytes)
   plates <- .lqa_plates(orig, cmp)
@@ -445,14 +444,13 @@ print.luminex_qa <- function(x, ...) {
     for (nm in unique(ds$series[ds$id_num == p & ds$issue])) {
       r <- ds[ds$id_num == p & ds$series == nm, ]
       parts <- character(0)
-      flat <- r$analyte[r$no_decrease | r$flat_vs_cohort]
-      if (length(flat)) parts <- c(parts, paste0("no substantive decrease with dose in ", paste(flat, collapse = ", ")))
-      up <- r[r$goes_up != "", ]
-      if (nrow(up)) {
-        steps <- unlist(strsplit(up$goes_up, ", "))
-        an_of <- rep(up$analyte, lengths(strsplit(up$goes_up, ", ")))
-        for (st in unique(steps))
-          parts <- c(parts, paste0("goes up from ", st, " (", paste(an_of[steps == st], collapse = ", "), ")"))
+      flat <- r$analyte[r$no_decrease]
+      if (length(flat)) parts <- c(parts, paste0("slope is 0 or positive in ", paste(flat, collapse = ", ")))
+      od <- r[r$odd != "", ]
+      if (nrow(od)) {
+        ev <- unlist(strsplit(od$odd, ", "))
+        an_of <- rep(od$analyte, lengths(strsplit(od$odd, ", ")))
+        for (e in unique(ev)) parts <- c(parts, paste0(e, " (", paste(an_of[ev == e], collapse = ", "), ")"))
       }
       out[[length(out) + 1]] <- data.frame(id_num = p, series = nm, text = paste(parts, collapse = "; "),
                                            stringsAsFactors = FALSE)
@@ -462,40 +460,35 @@ print.luminex_qa <- function(x, ...) {
   do.call(rbind, out)
 }
 
-.lqa_dose <- function(vals, dose_series, dip_pct = 25, low_dose = character(0)) {
+.lqa_dose <- function(vals, dose_series, dip_size = 1) {
   pts <- .lqa_dose_points(vals, dose_series)
   if (!nrow(pts)) return(list(points = pts, summary = data.frame()))
-  rise <- log(1 + dip_pct / 100)
   plate <- unique(vals[, c("id_num", "plate")]); plate <- plate[!duplicated(plate$id_num), ]
   grp <- split(pts, list(pts$id_num, pts$series, pts$analyte), drop = TRUE)
   res <- lapply(grp, function(g) {
     g <- g[order(g$step), ]
-    ok <- !is.na(g$score)
+    sc <- g$score
+    ok <- !is.na(sc)
     slope <- if (sum(ok) >= 3) {
-      x <- g$step[ok]; y <- g$score[ok]
+      x <- g$step[ok]; y <- sc[ok]
       sum((x - mean(x)) * (y - mean(y))) / sum((x - mean(x))^2)
     } else NA_real_
-    # any step where the scored value goes UP from one dose to the next
-    ups <- character(0)
-    for (k in seq_len(nrow(g) - 1)) {
-      # rises into or out of a low-dose well (crt_7, crt_6.5, lowest IL-10) are not tagged
-      if (g$condition[k] %in% low_dose || g$condition[k + 1] %in% low_dose) next
-      if (!is.na(g$score[k]) && !is.na(g$score[k + 1]) && g$score[k + 1] - g$score[k] > rise)
-        ups <- c(ups, paste0(g$condition[k], " to ", g$condition[k + 1]))
+    # one well far below (dip) or far above (spike) BOTH neighbouring doses
+    odd <- character(0)
+    if (length(sc) >= 3) for (k in 2:(length(sc) - 1)) {
+      if (anyNA(sc[c(k - 1, k, k + 1)])) next
+      if (sc[k] < sc[k - 1] - dip_size && sc[k] < sc[k + 1] - dip_size) odd <- c(odd, paste0("dip at ", g$condition[k]))
+      if (sc[k] > sc[k - 1] + dip_size && sc[k] > sc[k + 1] + dip_size) odd <- c(odd, paste0("spike at ", g$condition[k]))
     }
     data.frame(id_num = g$id_num[1], series = g$series[1], analyte = g$analyte[1],
-               n_doses = sum(ok), slope = slope, goes_up = paste(ups, collapse = ", "),
+               n_doses = sum(ok), slope = slope, odd = paste(odd, collapse = ", "),
                stringsAsFactors = FALSE)
   })
   d <- do.call(rbind, res)
   rownames(d) <- NULL
   d$plate <- plate$plate[match(d$id_num, plate$id_num)]
   d$no_decrease <- (d$slope >= 0) %in% TRUE
-  # much flatter than the rest of the cohort
-  d$cohort_median_slope <- stats::ave(d$slope, d$series, d$analyte, FUN = function(x) stats::median(x[is.finite(x)]))
-  d$slope_z <- stats::ave(d$slope, d$series, d$analyte, FUN = .lqa_robust_z)
-  d$flat_vs_cohort <- (d$slope_z > 3 & d$slope > d$cohort_median_slope / 2) %in% TRUE
-  d$issue <- d$no_decrease | d$flat_vs_cohort | d$goes_up != ""
+  d$issue <- d$no_decrease | d$odd != ""
   list(points = pts, summary = d[order(.lqa_idnum(d$id_num), d$id_num, d$series, d$analyte), ])
 }
 
@@ -541,7 +534,7 @@ print.luminex_qa <- function(x, ...) {
     stringsAsFactors = FALSE) else
       cbind(empty, tier = character(0), test = character(0), conds = character(0))
 
-  # 2. weak response to a stimulant in every cytokine (stimulant not added?)
+  # 2. a stimulated well about as high as US in every cytokine
   stim <- contrasts[contrasts$lower == "us", , drop = FALSE]
   weak <- empty
   if (nrow(stim)) {
@@ -554,25 +547,10 @@ print.luminex_qa <- function(x, ...) {
       if (nrow(g) >= 2 && isTRUE(all(g$z < -3))) data.frame(id_num = g$id_num[1], higher = g$higher[1],
                                                     fold = max(g$ratio), stringsAsFactors = FALSE)
     }))
-    if (!is.null(hit) && nrow(hit)) {
-      n_weak <- table(hit$id_num)
-      us_like <- names(n_weak)[n_weak >= 2]
-      one <- hit[!hit$id_num %in% us_like, ]
-      weak <- data.frame(
-        id_num = one$id_num, pattern = "stimulant possibly not added",
-        detail = paste0(one$higher, " barely above US in every cytokine (at most ",
-                        round(one$fold, 1), "x) - stimulant possibly not added"),
-        conds = one$higher, stringsAsFactors = FALSE)
-      if (length(us_like)) {
-        u <- hit[hit$id_num %in% us_like, ]
-        u <- stats::aggregate(higher ~ id_num, u, function(z) paste(z, collapse = ", "))
-        weak <- rbind(weak, data.frame(
-          id_num = u$id_num, pattern = "US well looks stimulated",
-          detail = paste0("US is as high as the stimulated wells (", u$higher,
-                          ") in every cytokine - US mislabelled or contaminated?"),
-          conds = "us", stringsAsFactors = FALSE))
-      }
-    }
+    if (!is.null(hit) && nrow(hit)) weak <- data.frame(
+      id_num = hit$id_num, pattern = "similar to us",
+      detail = paste0(hit$higher, " ~ us in all cytokines"),
+      conds = hit$higher, stringsAsFactors = FALSE)
   }
   if (!"conds" %in% names(weak)) weak$conds <- character(0)
 
@@ -701,12 +679,12 @@ print.luminex_qa <- function(x, ...) {
   cc <- x$contrasts
   pt <- x$patterns
   bp_id <- character(0); bp_txt <- character(0); bp_issue <- character(0)
-  # a stimulant that barely rises above US in every cytokine
-  wk <- pt$weak[pt$weak$pattern == "stimulant possibly not added", , drop = FALSE]
+  # a stimulated well about as high as US in every cytokine
+  wk <- pt$weak
   if (nrow(wk)) {
     bp_id <- c(bp_id, wk$id_num)
-    bp_issue <- c(bp_issue, paste0("low ", wk$conds, ifelse(wk$conds == "lps", "-only", ""), " well"))
-    bp_txt <- c(bp_txt, paste0(wk$conds, " ~ us, stimulant missing?"))
+    bp_issue <- c(bp_issue, paste0(toupper(wk$conds), " & US similar"))
+    bp_txt <- c(bp_txt, wk$detail)
   }
   if (nrow(cc) && any(!is.na(cc$diff))) {
     f <- cc[cc$flag & cc$tier == "core", ]

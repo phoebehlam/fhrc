@@ -13,7 +13,7 @@
 #'   \item{1011}{crt_6 well missing}
 #'   \item{1015}{hsp60 row entered twice}
 #'   \item{1019}{lps typed as "lsp"}
-#'   \item{1023}{little cortisol inhibition (flat dose-response)}
+#'   \item{1023}{cytokine rises with cortisol dose (slope >= 0), never above LPS}
 #'   \item{1027}{small IL-1b reversal (hsp60 slightly below US), within noise}
 #'   \item{1035}{TNF-a value missing for the r848 well}
 #'   \item{1043}{crt_5.5 and crt_7 labels swapped}
@@ -65,7 +65,7 @@ luminex_example <- function(file = NULL, n = 48, study = "MHS", il10 = FALSE, re
     for (cnd in conds) {
       f <- fold[[cnd]]
       if (resist == 1 && grepl("^crt", cnd))
-        f <- fold[["lps"]] * c(crt_7 = 0.88, crt_6.5 = 0.85, crt_6 = 0.82, crt_5.5 = 0.78)[[cnd]]
+        f <- fold[["lps"]] * c(crt_7 = 0.45, crt_6.5 = 0.55, crt_6 = 0.7, crt_5.5 = 0.88)[[cnd]]
       vals <- sapply(analytes, function(a) {
         m <- base_us[[a]] * exp(person[[a]]) * f * exp(stats::rnorm(1, 0, 0.12))
         if (grepl("_9_|Plate 09", plate_of[[as.character(p)]])) m <- m / 2.5

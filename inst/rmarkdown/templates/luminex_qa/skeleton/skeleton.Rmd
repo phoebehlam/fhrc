@@ -204,6 +204,7 @@ if (!nrow(cmp)) none("None found.") else {
   any_n <- sapply(tests, function(t) length(unique(cmp$id_num[cmp$test == t & cmp$flag])))
   d <- data.frame(check = tests,
                   as.data.frame(ct, check.names = FALSE), `any cytokine` = any_n,
+                  note = ifelse(S$contrasts$tier == "sensitive", "can typically ignore", ""),
                   check.names = FALSE, stringsAsFactors = FALSE)
   tbl(d)
 }
@@ -251,7 +252,7 @@ for (tt in S$contrasts$test) {
 
 Scored as in the scoring step: US subtracted from each well, negatives set to 0, then ln(x + 1). Dose 0 is the LPS-only well.
 
-Only participants who are not already tagged in Stimulation & inhibition order are listed and drawn in red here. A rise into or out of a low-dose well (`r paste(unique(S$contrasts$lower[S$contrasts$tier == "sensitive"]), collapse = ", ")`) is not tagged.
+Only participants who are not already tagged in Stimulation & inhibition order are listed and drawn in red here. A participant is tagged when the slope across doses is 0 or positive, or when one well dips far below (or spikes far above) both of its neighbouring doses.
 
 ```{r dose_response, results = "asis", fig.height = 3.8, fig.width = 10}
 ds <- qa$dose
