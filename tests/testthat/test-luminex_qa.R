@@ -29,7 +29,7 @@ test_that("planted swapped wells are stated as the broken order only", {
 })
 
 test_that("missing stimulant is stated, not mistaken for a swap", {
-  expect_true(has("1007", "LPS & US similar", "lps ~ us in all cytokines"))
+  expect_true(has("1007", "lps & us similar", "lps ~ us in all cytokines"))
   expect_false(any(grepl("stimulant missing|low lps", c(sm$issue, sm$detail))))
   expect_true(has("1007", "crt > lps", "crt_5.5 (il1b, il6, tnfa)"))
   expect_true(has("1007", "il10 > lps", "il10_.5 (il1b, il6, tnfa)"))
@@ -199,4 +199,16 @@ test_that("messy real-world values do not crash any setting (zeros, negatives, b
     expect_s3_class(q, "luminex_qa")
     if (length(q$dose) && nrow(q$dose)) expect_false(anyNA(q$dose$issue))
   }
+})
+
+test_that("cortisol and IL-10 wells above LPS are one category each in the summary", {
+  # an extra wrong-order pair with LPS (crt_6 well swapped with the LPS well) must land in "crt > lps"
+  d <- luminex_example(study = "OTR", il10 = TRUE)
+  a <- d$id == "OTR_1012_V1_lps"; b <- d$id == "OTR_1012_V1_crt_6"
+  d$id[a] <- "OTR_1012_V1_crt_6"; d$id[b] <- "OTR_1012_V1_lps"
+  q <- luminex_qa(d, il10 = TRUE)
+  expect_false(any(grepl("^(crt|il10)_[0-9.]+ > lps$", q$summary$issue)))
+  expect_true(any(q$summary$participant == "1012" & q$summary$issue == "crt > lps" &
+                    grepl("crt_6 (", q$summary$detail, fixed = TRUE)))
+  expect_false(any(grepl("[A-Z]", q$summary$issue)))      # all lower case
 })

@@ -151,7 +151,7 @@ if (!nrow(ld)) none("None found.") else {
   iss <- iss[order(ord)]
   tbl(data.frame(issue = iss, participants = vapply(iss, function(i) length(unique(ld$participant[ld$test == i])), 1L),
                  stringsAsFactors = FALSE))
-  cat("<p class='note'>These participants are listed under <b>Just in case</b>.</p>\n")
+  cat("<p class='note'>These we can typically ignore, but they are listed under <b>Just in case</b>.</p>\n")
 }
 ```
 
@@ -314,20 +314,22 @@ panel <- function(p, issues, details) {
   if (!nrow(v)) return(invisible())
   lv <- c(cond_order, setdiff(unique(v$condition), cond_order))
   lv_plot <- setdiff(lv, "us")              # US stays in the table, not the chart
-  pv <- merge(expand.grid(condition = lv_plot, analyte = an, stringsAsFactors = FALSE),
-              v[v$condition != "us", c("condition", "analyte", "value")], all.x = TRUE)
-  pv$value[!is.na(pv$value) & pv$value <= 0] <- NA
+  us_v <- v[v$condition == "us", c("analyte", "value")]
+  sub <- v[v$condition != "us", c("condition", "analyte", "value")]
+  sub$value <- sub$value - us_v$value[match(sub$analyte, us_v$analyte)]   # well minus US; negatives kept
+  pv <- merge(expand.grid(condition = lv_plot, analyte = an, stringsAsFactors = FALSE), sub, all.x = TRUE)
   pv$condition <- factor(pv$condition, levels = lv_plot)
   pv <- pv[order(pv$analyte, pv$condition), ]
   if (any(!is.na(pv$value))) {
     show_plot(
       ggplot(pv, aes(condition, value, colour = analyte, group = analyte)) +
+        geom_hline(yintercept = 0, colour = muted, linewidth = 0.5) +
         geom_line(linewidth = 0.8) +
         geom_point(size = 2.4, stroke = 0.6, shape = 21, fill = surface) +
         scale_colour_manual(values = analyte_cols, name = NULL) +
         scale_x_discrete(drop = FALSE) +
-        scale_y_log10(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +
-        labs(x = NULL, y = paste(S$measure, "(log)")))
+        scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +
+        labs(x = NULL, y = "MFI minus US (MFI units)"))
   } else cat("<p class='note'>No values for this participant.</p>\n")
   conds <- unique(v$condition)
   conds <- conds[order(match(conds, lv))]

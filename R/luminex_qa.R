@@ -708,7 +708,7 @@ print.luminex_qa <- function(x, ...) {
   wk <- pt$weak
   if (nrow(wk)) {
     bp_id <- c(bp_id, wk$id_num)
-    bp_issue <- c(bp_issue, paste0(toupper(wk$conds), " & US similar"))
+    bp_issue <- c(bp_issue, paste0(wk$conds, " & us similar"))
     bp_txt <- c(bp_txt, wk$detail)
   }
   if (nrow(cc) && any(!is.na(cc$diff))) {
@@ -728,10 +728,19 @@ print.luminex_qa <- function(x, ...) {
   sw <- .lqa_swap_items(x)
   low <- .lqa_low_wells(x)
   sw <- sw[!vapply(strsplit(sw$test, " > "), function(z) any(z %in% low), TRUE), , drop = FALSE]
+  flagged <- if (nrow(cc)) unique(paste(cc$id_num, cc$test)[cc$flag & cc$tier == "core"]) else character(0)
   for (i in seq_len(nrow(sw))) {
     p <- sw$id_num[i]; tt <- sw$test[i]
-    k <- which(bp_id == p & bp_issue == tt)
-    if (!length(k)) { bp_id <- c(bp_id, p); bp_issue <- c(bp_issue, tt); bp_txt <- c(bp_txt, sw$cytokines[i]) }
+    hl <- strsplit(tt, " > ")[[1]]
+    if (paste(p, tt) %in% flagged) next                       # already listed by its own check
+    ct <- S$contrasts[S$contrasts$lower == hl[1] & S$contrasts$higher == hl[2], ]
+    if (nrow(ct)) {                                           # a regular check: use its category (e.g. "crt > lps")
+      fam <- .lqa_family(hl[1], hl[2])
+      bp_id <- c(bp_id, p); bp_issue <- c(bp_issue, fam)
+      bp_txt <- c(bp_txt, if (hl[1] == "us") sw$cytokines[i] else paste0(hl[1], " (", sw$cytokines[i], ")"))
+    } else if (!any(bp_id == p & bp_issue == tt)) {
+      bp_id <- c(bp_id, p); bp_issue <- c(bp_issue, tt); bp_txt <- c(bp_txt, sw$cytokines[i])
+    }
   }
   add_joined(bp_id, bp_txt, bp_issue)
 
