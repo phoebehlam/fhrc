@@ -349,7 +349,7 @@ ids_show <- utils::head(tagged_ids, params$max_detail)
 if (!length(tagged_ids)) none("None found.")
 ```
 
-```{r detail, results = "asis", fig.height = 3.3, fig.width = 10}
+```{r detail, results = "asis", fig.height = 3.6, fig.width = 10}
 panel <- function(p, issues, details) {
   v <- qa$values[qa$values$id_num == p, ]
   cat("\n\n## ", p, " {.participant}\n\n", sep = "")
@@ -366,7 +366,6 @@ panel <- function(p, issues, details) {
     pv <- pv[order(pv$analyte, pv$x), ]
     us <- v[v$condition == "us" & !is.na(v$mfi), c("analyte", "mfi")]
     us$x <- max(pos_plot$x) + 0.45
-    many <- nrow(pos_plot) > 7
     show_plot(
       ggplot(pv, aes(x, mfi, colour = analyte)) +
         geom_hline(data = us, aes(yintercept = mfi, colour = analyte), linetype = "dashed", linewidth = 0.6) +
@@ -381,7 +380,7 @@ panel <- function(p, issues, details) {
         expand_limits(y = 0) +
         facet_wrap(~ analyte, nrow = 1, scales = "free_y") +
         labs(x = NULL, y = "MFI") +
-        theme(axis.text.x = if (many) element_text(angle = 45, hjust = 1, vjust = 1) else element_text()))
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)))
   } else cat("<p class='note'>No values for this participant.</p>\n")
   conds <- unique(v$condition)
   conds <- conds[order(match(conds, lv))]
@@ -408,7 +407,7 @@ for (p in ids_show) {
 
 # Just in case
 
-```{r jic, results = "asis", fig.height = 3.3, fig.width = 10}
+```{r jic, results = "asis", fig.height = 3.6, fig.width = 10}
 if (!nrow(ld)) {
   none("None found.")
 } else {
