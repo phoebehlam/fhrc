@@ -94,15 +94,23 @@ test_that("dose-response is scored like the scoring step and catches flat lines 
                c("lps", "crt_7", "crt_6.5", "crt_6", "crt_5.5"))
   # planted problems
   expect_true(has("1023", "no dose-response", "cortisol: no substantive decrease with dose in"))
-  expect_true(has("1043", "no dose-response", "goes up from crt_7 to crt_6.5"))
-  expect_true(has("1007", "no dose-response", "goes up from lps to crt_7"))
+  expect_true(has("1043", "no dose-response", "goes up from crt_6 to crt_5.5"))
+  expect_true(has("1007", "no dose-response", "no substantive decrease"))
+  # rises into or out of a low-dose well are not tagged
+  expect_false(any(grepl("goes up from [^;]*(crt_7|crt_6\\.5|il10_\\.02)", sm$detail)))
   # a single odd dip is tagged
   d <- luminex_example(study = "OTR", il10 = TRUE)
-  k <- d$id == "OTR_1010_V1_crt_7"
+  k <- d$id == "OTR_1010_V1_crt_6"
   d$il1b_avg_mfi[k] <- d$il1b_avg_mfi[d$id == "OTR_1010_V1_us"] + 2
   q <- luminex_qa(d, il10 = TRUE)
   expect_true(any(q$summary$participant == "1010" & q$summary$issue == "no dose-response" &
-                    grepl("goes up from crt_7 to crt_6.5 (il1b)", q$summary$detail, fixed = TRUE)))
+                    grepl("goes up from crt_6 to crt_5.5 (il1b)", q$summary$detail, fixed = TRUE)))
+  # the same dip at a low-dose well is not tagged
+  d2 <- luminex_example(study = "OTR", il10 = TRUE)
+  k2 <- d2$id == "OTR_1010_V1_crt_7"
+  d2$il1b_avg_mfi[k2] <- d2$il1b_avg_mfi[d2$id == "OTR_1010_V1_us"] + 2
+  q2 <- luminex_qa(d2, il10 = TRUE)
+  expect_false(any(q2$summary$participant == "1010" & grepl("goes up from crt_7", q2$summary$detail)))
 })
 
 test_that("il10 / hsp60 / r848 switches work", {

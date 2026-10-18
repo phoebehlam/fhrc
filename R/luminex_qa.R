@@ -111,6 +111,8 @@ luminex_dose_series <- function(il10 = FALSE) {
 #'   reversal), matching the original script.
 #' @param dip_pct Percent. In the dose-response check, a scored value that
 #'   rises by more than this from one dose to the next is listed (default 25).
+#'   Rises into or out of a low-dose well (crt_7, crt_6.5, lowest IL-10) are
+#'   not listed.
 #' @param study,visit Labels for the report. Default: taken from the ids.
 #' @return An object of class `luminex_qa` (a list of data frames).
 #' @examples
@@ -207,7 +209,8 @@ luminex_qa <- function(data,
   vals <- orig[!duplicated(orig[, c("id_num", "condition", "analyte")]), , drop = FALSE]
   missing <- .lqa_missing(vals, expected_conditions, analytes, expected_ids)
   cmp <- .lqa_contrasts(vals, contrasts, tolerance, cv_threshold, extra)
-  dose_all <- .lqa_dose(vals, dose_series, dip_pct)
+  low_dose <- unique(contrasts$lower[contrasts$tier == "sensitive"])
+  dose_all <- .lqa_dose(vals, dose_series, dip_pct, low_dose)
   dose <- dose_all$summary
   patterns <- .lqa_patterns(vals, cmp, contrasts, dose_series, analytes)
   plates <- .lqa_plates(orig, cmp)
@@ -459,7 +462,7 @@ print.luminex_qa <- function(x, ...) {
   do.call(rbind, out)
 }
 
-.lqa_dose <- function(vals, dose_series, dip_pct = 25) {
+.lqa_dose <- function(vals, dose_series, dip_pct = 25, low_dose = character(0)) {
   pts <- .lqa_dose_points(vals, dose_series)
   if (!nrow(pts)) return(list(points = pts, summary = data.frame()))
   rise <- log(1 + dip_pct / 100)
@@ -475,6 +478,8 @@ print.luminex_qa <- function(x, ...) {
     # any step where the scored value goes UP from one dose to the next
     ups <- character(0)
     for (k in seq_len(nrow(g) - 1)) {
+      # rises into or out of a low-dose well (crt_7, crt_6.5, lowest IL-10) are not tagged
+      if (g$condition[k] %in% low_dose || g$condition[k + 1] %in% low_dose) next
       if (!is.na(g$score[k]) && !is.na(g$score[k + 1]) && g$score[k + 1] - g$score[k] > rise)
         ups <- c(ups, paste0(g$condition[k], " to ", g$condition[k + 1]))
     }

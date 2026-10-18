@@ -52,7 +52,9 @@ higher well is more than `tolerance`\% below the other. Default 0 (any
 reversal), matching the original script.}
 
 \item{dip_pct}{Percent. In the dose-response check, a scored value that
-rises by more than this from one dose to the next is listed (default 25).}
+rises by more than this from one dose to the next is listed (default 25).
+Rises into or out of a low-dose well (crt_7, crt_6.5, lowest IL-10) are
+not listed.}
 
 \item{study, visit}{Labels for the report. Default: taken from the ids.}
 }

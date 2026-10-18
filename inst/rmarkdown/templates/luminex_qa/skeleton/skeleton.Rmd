@@ -136,10 +136,9 @@ if (!nrow(sm)) {
   cat(sprintf("<p>%d problem%s across %d participant%s.</p>\n",
               nrow(sm), if (nrow(sm) == 1) "" else "s",
               length(all_ids), if (length(all_ids) == 1) "" else "s"))
-  d <- sm
-  d$plate <- short_plate(d$plate)
-  d$plate[is.na(d$plate)] <- ""
-  tbl(d, col.names = c("id", "issue", "detail", "plate"))
+  iss <- unique(sm$issue)                     # already in summary order
+  tbl(data.frame(issue = iss, participants = vapply(iss, function(i) length(unique(sm$participant[sm$issue == i])), 1L),
+                 stringsAsFactors = FALSE))
 }
 ```
 
@@ -252,6 +251,8 @@ for (tt in S$contrasts$test) {
 
 Scored as in the scoring step: US subtracted from each well, negatives set to 0, then ln(x + 1). Dose 0 is the LPS-only well.
 
+Only participants who are not already tagged in Stimulation & inhibition order are listed and drawn in red here. A rise into or out of a low-dose well (`r paste(unique(S$contrasts$lower[S$contrasts$tier == "sensitive"]), collapse = ", ")`) is not tagged.
+
 ```{r dose_response, results = "asis", fig.height = 3.8, fig.width = 10}
 ds <- qa$dose
 di <- qa$dose_issues
@@ -263,7 +264,7 @@ if (!length(S$dose_series) || !length(ds) || !nrow(ds)) {
 } else {
   for (nm in names(S$dose_series)) {
     cat("\n\n## ", nm, "\n\n", sep = "")
-    d_nm <- di[di$series == nm, ]
+    d_nm <- di[di$series == nm & !di$id_num %in% tagged_above, ]
     ids <- unique(d_nm$id_num)
     v <- dp[dp$series == nm & !is.na(dp$score), ]
     if (!nrow(v)) { none("None found."); next }
@@ -291,12 +292,7 @@ if (!length(S$dose_series) || !length(ds) || !nrow(ds)) {
         labs(x = "dose", y = "ln(MFI - US + 1)"))
     if (!length(ids)) { none("None found."); next }
     d_nm <- d_nm[order(idnum(d_nm$id_num), d_nm$id_num), ]
-    cat("\n\n<p><b>Already tagged in Stimulation &amp; inhibition order</b></p>\n")
-    t1 <- d_nm[d_nm$id_num %in% tagged_above, c("id_num", "text")]
-    tbl(t1, col.names = c("id", "dose-response issue"))
-    cat("\n\n<p><b>Not tagged above</b></p>\n")
-    t2 <- d_nm[!d_nm$id_num %in% tagged_above, c("id_num", "text")]
-    tbl(t2, col.names = c("id", "dose-response issue"))
+    tbl(d_nm[, c("id_num", "text")], col.names = c("id", "dose-response issue"))
     cat("\n\n")
   }
 }
