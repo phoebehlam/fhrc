@@ -43,6 +43,7 @@ email or OneDrive. Nothing else needs to be sent alongside it.
 \details{
 Sections: Summary (every problem, plus a count of low-dose reversals),
 Missing & data entry, Stimulation & inhibition order, Dose-response,
+Plates (runs of participants next to each other with the same problem),
 Tagged participants (issues, chart and values for each participant with a
 problem in their values) and Just in case (the same for participants whose
 only reversals are at the low-dose wells).

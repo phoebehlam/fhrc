@@ -22,18 +22,24 @@ test_that("ids are parsed: any study letters, 3-4 digit ids, repeat / interassay
 test_that("planted swapped wells are stated as the broken order only", {
   expect_true(has("1003", "us > r848", "il1b, il6, tnfa"))
   expect_true(has("1003", "us > hsp60", "il1b, il6, tnfa"))
-  # a swap that involves a low-dose well is listed with the low-dose wells, not in the summary
-  expect_true(any(qa$low_dose$participant == "1043" & qa$low_dose$test == "crt_5.5 > crt_7" &
-                    qa$low_dose$cytokines == "il1b, il6, tnfa"))
-  expect_false(any(sm$issue == "crt_5.5 > crt_7"))
+  # crt_5.5 / crt_7 swapped: shows up as a dip at crt_7, no wrong-order pair is listed
+  expect_true(has("1043", "dose-response dip/spike", "cortisol: dip at crt_7 (il1b, il6, tnfa)"))
+  expect_false(any(grepl("^crt_[0-9.]+ > crt", c(sm$issue, qa$low_dose$test))))
 })
 
-test_that("missing stimulant is stated, not mistaken for a swap", {
-  expect_true(has("1007", "lps & us similar", "lps ~ us in all cytokines"))
-  expect_false(any(grepl("stimulant missing|low lps", c(sm$issue, sm$detail))))
-  expect_true(has("1007", "crt > lps", "crt_5.5 (il1b, il6, tnfa)"))
-  expect_true(has("1007", "il10 > lps", "il10_.5 (il1b, il6, tnfa)"))
+test_that("missing stimulant is stated plainly; 'similar to us' is gone", {
+  expect_false(any(grepl("similar|stimulant missing|low lps", c(sm$issue, sm$detail))))
+  expect_true(has("1007", "crt > 2x lps", "crt_5.5 (il1b, il6, tnfa)"))
+  expect_true(has("1007", "il10 > 2x lps", "il10_.5 (il1b, il6, tnfa)"))
   expect_false(any(grepl("swap", c(sm$detail, qa$low_dose$cytokines))))
+})
+
+test_that("inhibitor wells are tagged only above 2x LPS", {
+  expect_true(has("1023", "crt > 2x lps", "crt_6 (il1b, il6, tnfa)"))
+  cc <- qa$contrasts[qa$contrasts$lower != "us" & !is.na(qa$contrasts$diff), ]
+  expect_equal(cc$flag, cc$lower_value > 2 * cc$higher_value)
+  q <- luminex_qa(luminex_example(study = "OTR", il10 = TRUE), il10 = TRUE, inhibitor_fold = 1)
+  expect_true(any(q$summary$issue == "crt > lps"))
 })
 
 test_that("data entry and missing data problems are stated plainly", {
@@ -44,10 +50,16 @@ test_that("data entry and missing data problems are stated plainly", {
   expect_true(has("1035", "missing data", "r848: tnfa blank"))
 })
 
-test_that("dose-response and pattern problems are found; no plate rows", {
-  expect_true(has("1023", "no dose-response", "cortisol: slope is positive in"))
+test_that("small reversals are found; plates with a run of the same problem are listed", {
   expect_true(has("1027", "us > hsp60", "il1b"))
   expect_false(any(sm$issue == "plate"))
+  pr <- qa$plates
+  expect_true(all(grepl("Plate 12", pr$plate)))
+  expect_true(any(pr$issue == "us > lps" & pr$participants == "1044, 1045, 1046" & pr$n == 3))
+  # two in a row is not enough
+  d <- luminex_example(study = "OTR", il10 = TRUE)
+  d <- d[!grepl("_1046_", d$id), ]
+  expect_false(any(luminex_qa(d, il10 = TRUE)$plates$issue == "us > lps"))
 })
 
 test_that("summary states problems only: no percentages, guesses or attributions", {
@@ -57,9 +69,9 @@ test_that("summary states problems only: no percentages, guesses or attributions
 })
 
 test_that("no unplanted participant gets a data, bench-error or dose-response row", {
-  planted <- c("1003", "1007", "1011", "1015", "1019", "1023", "1035", "1043")
-  serious <- sm$issue %in% c("duplicated data", "unknown condition", "missing data") |
-    grepl("&", sm$issue) | (sm$issue == "us > r848") | (sm$issue == "no dose-response" & grepl("slope", sm$detail))
+  planted <- c("1003", "1007", "1011", "1015", "1019", "1023", "1035", "1043", "1044", "1045", "1046")
+  serious <- sm$issue %in% c("duplicated data", "unknown condition", "missing data", "us > r848", "us > lps",
+                             "crt > 2x lps", "il10 > 2x lps", "dose-response dip/spike")
   got <- unique(sm$participant[serious & grepl("^[0-9]+$", sm$participant)])
   expect_setequal(got, planted)
 })
@@ -85,37 +97,41 @@ test_that("two visits in one file are fine: no visit flag, participants kept apa
   expect_equal(q$settings$visit, "V1 & V2")
 })
 
-test_that("dose-response is scored like the scoring step and catches flat lines and dips", {
-  # by hand: ln(max(well - us, 0) + 1)
+test_that("dose-response uses ln(MFI + 1) and tags dips / spikes seen in 2+ cytokines", {
+  # by hand: ln(max(well, 0) + 1), no US subtraction
   v <- qa$values
   get <- function(cond, a) v$value[v$id_num == "1005" & v$condition == cond & v$analyte == a]
   dp <- qa$dose_points
   expect_equal(dp$score[dp$id_num == "1005" & dp$series == "cortisol" & dp$analyte == "il6" & dp$step == 0],
-               log(max(get("lps", "il6") - get("us", "il6"), 0) + 1))
+               log(max(get("lps", "il6"), 0) + 1))
   expect_equal(dp$score[dp$id_num == "1005" & dp$series == "cortisol" & dp$analyte == "il6" & dp$step == 4],
-               log(max(get("crt_5.5", "il6") - get("us", "il6"), 0) + 1))
+               log(max(get("crt_5.5", "il6"), 0) + 1))
   expect_equal(dp$condition[dp$id_num == "1005" & dp$series == "cortisol" & dp$analyte == "il6"],
                c("lps", "crt_7", "crt_6.5", "crt_6", "crt_5.5"))
-  # planted problems
-  expect_true(has("1023", "no dose-response", "cortisol: slope is positive in"))
-  expect_false(any(grepl("no substantive|goes up", sm$detail)))
-  dip_test <- function(cond, analyte = "il1b") {
+  expect_false(any(grepl("slope|no substantive|goes up", sm$detail)))
+  dip_test <- function(cond, analytes = c("il1b", "il6")) {
     d <- luminex_example(study = "OTR", il10 = TRUE)
-    col <- paste0(analyte, "_avg_mfi")
-    d[[col]][d$id == paste0("OTR_1010_V1_", cond)] <- d[[col]][d$id == "OTR_1010_V1_us"] + 2
+    for (a in analytes) {
+      col <- paste0(a, "_avg_mfi")
+      d[[col]][d$id == paste0("OTR_1010_V1_", cond)] <- d[[col]][d$id == "OTR_1010_V1_us"] + 2
+    }
     luminex_qa(d, il10 = TRUE)$dose_issues
   }
-  # a single sudden dip is tagged, including at a low-dose well
+  # a sudden dip in two cytokines is tagged, including at a low-dose well
   di <- dip_test("crt_6")
-  expect_true(any(di$id_num == "1010" & grepl("dip at crt_6 (il1b)", di$text, fixed = TRUE)))
+  expect_true(any(di$id_num == "1010" & grepl("dip at crt_6 (il1b, il6)", di$text, fixed = TRUE)))
   di <- dip_test("crt_7")
-  expect_true(any(di$id_num == "1010" & grepl("dip at crt_7 (il1b)", di$text, fixed = TRUE)))
-  # a spike is tagged
+  expect_true(any(di$id_num == "1010" & grepl("dip at crt_7 (il1b, il6)", di$text, fixed = TRUE)))
+  # ... but not when it is in one cytokine only
+  di <- dip_test("crt_6", "il1b")
+  expect_false(any(di$id_num == "1010"))
+  # a spike in two cytokines is tagged
   d <- luminex_example(study = "OTR", il10 = TRUE)
   k <- d$id == "OTR_1010_V1_crt_6.5"
   d$tnfa_avg_mfi[k] <- d$tnfa_avg_mfi[k] * 20
+  d$il6_avg_mfi[k] <- d$il6_avg_mfi[k] * 20
   di <- luminex_qa(d, il10 = TRUE)$dose_issues
-  expect_true(any(di$id_num == "1010" & grepl("spike at crt_6.5 (tnfa)", di$text, fixed = TRUE)))
+  expect_true(any(di$id_num == "1010" & grepl("spike at crt_6.5 (il6, tnfa)", di$text, fixed = TRUE)))
   # a rise at the last dose (crt_5.5) is not a dip or spike
   d <- luminex_example(study = "OTR", il10 = TRUE)
   k <- d$id == "OTR_1010_V1_crt_5.5"
@@ -165,13 +181,13 @@ test_that("every reversal at the regular wells is in the summary; low-dose ones 
   core <- qa$contrasts[qa$contrasts$flag & qa$contrasts$tier == "core", ]
   # every flagged participant x regular check shows up under its issue label
   for (i in seq_len(nrow(core))) {
-    fam <- fhrc:::.lqa_family(core$lower[i], core$higher[i])
+    fam <- fhrc:::.lqa_family(core$lower[i], core$higher[i], core$fold[i])
     expect_true(any(sm$participant == core$id_num[i] & sm$issue == fam & grepl(core$analyte[i], sm$detail, fixed = TRUE)),
                 info = paste(core$id_num[i], core$test[i], core$analyte[i]))
   }
   low <- qa$contrasts[qa$contrasts$flag & qa$contrasts$tier == "sensitive", ]
   expect_true(all(unique(low$id_num) %in% qa$low_dose$participant))
-  expect_false(any(grepl("crt_7|crt_6.5|il10_.02", sm$detail[sm$issue != "no dose-response"])))
+  expect_false(any(grepl("crt_7|crt_6.5|il10_.02", sm$detail[sm$issue != "dose-response dip/spike"])))
   # every low-dose item involves a low-dose well
   expect_true(all(grepl("crt_7|crt_6\\.5|il10_\\.02", qa$low_dose$test)))
 })
@@ -202,27 +218,25 @@ test_that("messy real-world values do not crash any setting (zeros, negatives, b
 })
 
 test_that("cortisol and IL-10 wells above LPS are one category each in the summary", {
-  # an extra wrong-order pair with LPS (crt_6 well swapped with the LPS well) must land in "crt > lps"
+  # crt_6 well swapped with the LPS well: lands in "crt > 2x lps"
   d <- luminex_example(study = "OTR", il10 = TRUE)
   a <- d$id == "OTR_1012_V1_lps"; b <- d$id == "OTR_1012_V1_crt_6"
   d$id[a] <- "OTR_1012_V1_crt_6"; d$id[b] <- "OTR_1012_V1_lps"
   q <- luminex_qa(d, il10 = TRUE)
-  expect_false(any(grepl("^(crt|il10)_[0-9.]+ > lps$", q$summary$issue)))
-  expect_true(any(q$summary$participant == "1012" & q$summary$issue == "crt > lps" &
+  expect_false(any(grepl("^(crt|il10)_[0-9.]+ > ", q$summary$issue)))
+  expect_true(any(q$summary$participant == "1012" & q$summary$issue == "crt > 2x lps" &
                     grepl("crt_6 (", q$summary$detail, fixed = TRUE)))
   expect_false(any(grepl("[A-Z]", q$summary$issue)))      # all lower case
 })
 
-test_that("a slope of exactly 0 is not tagged; a positive slope is", {
+test_that("cortisol wells rising with dose (but under 2x LPS) are not tagged", {
   d <- luminex_example(study = "OTR")
-  # participant 1010: every cortisol well equal to the LPS well -> slope exactly 0
-  for (cnd in c("crt_7", "crt_6.5", "crt_6", "crt_5.5")) for (a in c("il1b", "il6", "tnfa")) {
+  f <- c(crt_7 = 1.1, crt_6.5 = 1.3, crt_6 = 1.6, crt_5.5 = 1.9)
+  for (cnd in names(f)) for (a in c("il1b", "il6", "tnfa")) {
     col <- paste0(a, "_avg_mfi")
-    d[[col]][d$id == paste0("OTR_1010_V1_", cnd)] <- d[[col]][d$id == "OTR_1010_V1_lps"]
+    d[[col]][d$id == paste0("OTR_1010_V1_", cnd)] <- d[[col]][d$id == "OTR_1010_V1_lps"] * f[[cnd]]
   }
   q <- luminex_qa(d)
-  s0 <- q$dose[q$dose$id_num == "1010" & q$dose$series == "cortisol", ]
-  expect_true(all(abs(s0$slope) < 1e-12))
-  expect_false(any(s0$no_decrease))
-  expect_true(any(q$dose$no_decrease[q$dose$id_num == "1023"]))
+  expect_false(any(q$summary$participant == "1010"))
+  expect_true(any(q$low_dose$participant == "1010") == FALSE)
 })

@@ -84,9 +84,28 @@ cond_order <- local({
   c(intersect(base, S$expected_conditions), setdiff(S$expected_conditions, base))
 })
 idnum <- function(x) suppressWarnings(as.numeric(sub("_.*$", "", x)))
+pos_plot <- local({
+  stims <- setdiff(unique(S$contrasts$higher[S$contrasts$lower == "us"]), "lps")
+  stims <- intersect(stims, S$expected_conditions)
+  out <- data.frame(condition = stims, x = seq_along(stims), line = NA_character_, stringsAsFactors = FALSE)
+  xx <- length(stims)
+  blocks <- lapply(S$dose_series, function(s) c(s$reference, names(sort(s$doses))))
+  if (!length(blocks) && "lps" %in% S$expected_conditions) blocks <- list(lps = "lps")
+  for (nm in names(blocks)) {
+    cs <- blocks[[nm]]
+    if (xx > 0) xx <- xx + 0.5                                 # small gap between groups
+    out <- rbind(out, data.frame(condition = cs, x = xx + seq_along(cs), line = nm, stringsAsFactors = FALSE))
+    xx <- xx + length(cs)
+  }
+  out
+})
 is_pid <- grepl("^[0-9]+(_V[0-9]+)?$", sm$participant)
 all_ids <- unique(sm$participant[is_pid])
 file_issues <- c("set-up", "unreadable id", "duplicated data", "unknown condition", "different study prefix", "missing data", "plate")
+dose_label <- "dose-response dip/spike"
+pr <- qa$plates
+if (is.null(pr) || !is.data.frame(pr)) pr <- data.frame()
+inhib_fold <- unique(S$contrasts$fold[S$contrasts$lower != "us"])
 tagged_ids <- unique(sm$participant[is_pid & !sm$issue %in% file_issues])
 tagged_ids <- tagged_ids[order(idnum(tagged_ids), tagged_ids)]
 ld <- qa$low_dose
@@ -136,9 +155,15 @@ if (!nrow(sm)) {
   cat(sprintf("<p>%d problem%s across %d participant%s.</p>\n",
               nrow(sm), if (nrow(sm) == 1) "" else "s",
               length(all_ids), if (length(all_ids) == 1) "" else "s"))
-  iss <- unique(sm$issue)                     # already in summary order
+  iss <- unique(sm$issue)
+  iss <- iss[order(fhrc:::.lqa_issue_rank(iss, S), iss)]
   tbl(data.frame(issue = iss, participants = vapply(iss, function(i) length(unique(sm$participant[sm$issue == i])), 1L),
                  stringsAsFactors = FALSE))
+}
+if (nrow(pr)) {
+  np <- length(unique(pr$plate))
+  cat(sprintf("<p>%d plate%s with the same problem in %d or more participants in a row: see <b>Plates</b>.</p>\n",
+              np, if (np == 1) "" else "s", S$plate_run))
 }
 ```
 
@@ -191,7 +216,7 @@ if (is.null(issues)) none("None found.") else tbl(issues[order(issues$excel_row)
 
 # Stimulation & inhibition order
 
-Stimulated wells should have more cytokines than US. Similarly, `r if ("il10" %in% names(S$dose_series)) "cortisol and IL-10 wells" else "cortisol wells"` should have less than LPS alone. The table below counts participants not conforming to these two patterns.
+Stimulated wells should have more cytokines than US. Similarly, `r if ("il10" %in% names(S$dose_series)) "cortisol and IL-10 wells" else "cortisol wells"` should have less than LPS alone; `r if ("il10" %in% names(S$dose_series)) "one of these wells" else "a cortisol well"` is counted only when it is more than `r paste(inhib_fold, collapse = "/")`x the LPS well. The table below counts participants not conforming to these two patterns.
 
 ```{r counts, results = "asis"}
 cmp <- qa$contrasts
@@ -248,15 +273,15 @@ for (tt in setdiff(S$contrasts$test, S$contrasts$test[S$contrasts$lower == "crt_
 
 # Dose-response
 
-Scored as in the scoring step: US subtracted from each well, negatives set to 0, then ln(x + 1). Dose 0 is the LPS-only well.
+Values shown as ln(MFI + 1). Dose 0 is the LPS-only well.
 
-Only participants who are not already tagged in Stimulation & inhibition order are listed and drawn in red here. A participant is tagged when the slope across doses is positive, or when one well dips far below (or spikes far above) both of its neighbouring doses.
+Only participants who are not already tagged in Stimulation & inhibition order are listed and drawn in red here. A participant is tagged when one well dips far below (or spikes far above) both of its neighbouring doses in at least `r S$dip_cytokines` cytokines.
 
 ```{r dose_response, results = "asis", fig.height = 3.8, fig.width = 10}
 ds <- qa$dose
 di <- qa$dose_issues
 dp <- qa$dose_points
-stim_issue <- !sm$issue %in% c(file_issues, "no dose-response")
+stim_issue <- !sm$issue %in% c(file_issues, dose_label)
 tagged_above <- unique(sm$participant[stim_issue])
 if (!length(S$dose_series) || !length(ds) || !nrow(ds)) {
   none("None found.")
@@ -288,11 +313,31 @@ if (!length(S$dose_series) || !length(ds) || !nrow(ds)) {
         scale_x_continuous(breaks = steps$step, labels = paste0(steps$step, "\n", steps$condition),
                            expand = expansion(add = c(0.3, 1.1))) +
         facet_wrap(~ analyte, nrow = 1) +
-        labs(x = "dose", y = "ln(MFI - US + 1)"))
+        labs(x = "dose", y = "ln(MFI + 1)"))
     if (!length(ids)) { none("None found."); next }
     d_nm <- d_nm[order(idnum(d_nm$id_num), d_nm$id_num), ]
     tbl(d_nm[, c("id_num", "text")], col.names = c("id", "dose-response issue"))
     cat("\n\n")
+  }
+}
+```
+
+# Plates
+
+```{r plates, results = "asis"}
+if (!nrow(pr)) {
+  none("None found.")
+} else {
+  cat(sprintf("<p class='note'>Listed when %d or more participants next to each other on the same plate (in id order) have the same problem.</p>\n",
+              S$plate_run))
+  for (p in unique(pr$plate)) {
+    r <- pr[pr$plate == p, ]
+    parts <- vapply(unique(r$participants), function(ps) {
+      k <- r$participants == ps
+      sprintf("%d participants in a row (%s) have %s", r$n[k][1], ps, paste(r$issue[k], collapse = ", "))
+    }, "")
+    cat(sprintf("<p><b>%s</b>: %s. Please investigate.</p>\n", htmltools::htmlEscape(short_plate(p)),
+                htmltools::htmlEscape(paste(parts, collapse = "; "))))
   }
 }
 ```
@@ -313,21 +358,30 @@ panel <- function(p, issues, details) {
                      htmltools::htmlEscape(details), "</li>", collapse = ""), "</ul>\n", sep = "")
   if (!nrow(v)) return(invisible())
   lv <- c(cond_order, setdiff(unique(v$condition), cond_order))
-  lv_plot <- lv
-  pv <- merge(expand.grid(condition = lv_plot, analyte = an, stringsAsFactors = FALSE),
-              v[, c("condition", "analyte", "mfi")], all.x = TRUE)
-  names(pv)[names(pv) == "mfi"] <- "value"
-  pv$condition <- factor(pv$condition, levels = lv_plot)
-  pv <- pv[order(pv$analyte, pv$condition), ]
-  if (any(!is.na(pv$value))) {
+  if (nrow(pos_plot) && any(!is.na(v$mfi))) {
+    pv <- merge(expand.grid(condition = pos_plot$condition, analyte = an, stringsAsFactors = FALSE),
+                v[, c("condition", "analyte", "mfi")], all.x = TRUE)
+    pv <- pv[!duplicated(pv[, c("condition", "analyte")]), ]
+    pv <- merge(pos_plot, pv, by = "condition")             # a reference well shown twice gets both positions
+    pv <- pv[order(pv$analyte, pv$x), ]
+    us <- v[v$condition == "us" & !is.na(v$mfi), c("analyte", "mfi")]
+    us$x <- max(pos_plot$x) + 0.45
+    many <- nrow(pos_plot) > 7
     show_plot(
-      ggplot(pv, aes(condition, value, colour = analyte, group = analyte)) +
-        geom_line(linewidth = 0.8) +
-        geom_point(size = 2.4, stroke = 0.6, shape = 21, fill = surface) +
-        scale_colour_manual(values = analyte_cols, name = NULL) +
-        scale_x_discrete(drop = FALSE) +
-        scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +
-        labs(x = NULL, y = "MFI"))
+      ggplot(pv, aes(x, mfi, colour = analyte)) +
+        geom_hline(data = us, aes(yintercept = mfi, colour = analyte), linetype = "dashed", linewidth = 0.6) +
+        geom_text(data = us, aes(x = x, y = mfi, label = "US"), colour = ink2, size = 3, vjust = -0.4) +
+        geom_line(data = pv[!is.na(pv$line) & !is.na(pv$mfi), ], aes(group = interaction(analyte, line)), linewidth = 0.9) +
+        geom_point(data = pv[!is.na(pv$mfi), ], size = 2.4, shape = 21, fill = surface, stroke = 0.7) +
+        scale_colour_manual(values = analyte_cols, guide = "none") +
+        scale_x_continuous(breaks = pos_plot$x, labels = pos_plot$condition,
+                           limits = c(min(pos_plot$x) - 0.3, max(pos_plot$x) + 0.7)) +
+        scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE),
+                           expand = expansion(mult = c(0.03, 0.12))) +
+        expand_limits(y = 0) +
+        facet_wrap(~ analyte, nrow = 1, scales = "free_y") +
+        labs(x = NULL, y = "MFI") +
+        theme(axis.text.x = if (many) element_text(angle = 45, hjust = 1, vjust = 1) else element_text()))
   } else cat("<p class='note'>No values for this participant.</p>\n")
   conds <- unique(v$condition)
   conds <- conds[order(match(conds, lv))]

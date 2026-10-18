@@ -48,10 +48,12 @@ Planted problems (participant id numbers):
   \item{1011}{crt_6 well missing}
   \item{1015}{hsp60 row entered twice}
   \item{1019}{lps typed as "lsp"}
-  \item{1023}{cytokine rises with cortisol dose (slope >= 0), never above LPS}
+  \item{1023}{LPS-only well reads low, so the cortisol wells read more than 2x LPS}
   \item{1027}{small IL-1b reversal (hsp60 slightly below US), within noise}
   \item{1035}{TNF-a value missing for the r848 well}
-  \item{1043}{crt_5.5 and crt_7 labels swapped}
+  \item{1043}{crt_5.5 and crt_7 labels swapped (shows as a dip at crt_7)}
+  \item{1044-1046}{US and LPS wells swapped for three participants next to
+    each other on plate 12 (listed under Plates)}
   \item{plate 09}{every value on the plate reads about 2.5x low}
 }
 }

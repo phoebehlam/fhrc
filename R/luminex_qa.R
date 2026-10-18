@@ -9,8 +9,10 @@
 #' Expected stimulation / inhibition comparisons for Luminex QA
 #'
 #' Each row is one check: within a participant, the `higher` well should have
-#' more cytokine than the `lower` well. A participant is flagged when the
-#' reverse is true. `tier = "sensitive"` marks the low-dose checks (crt_6.5,
+#' more cytokine than the `lower` well. A stimulated well is flagged when US
+#' reads higher; an inhibitor well (cortisol, IL-10) is flagged only when it
+#' reads more than `inhibitor_fold` times the LPS well (column `fold`).
+#' `tier = "sensitive"` marks the low-dose checks (crt_6.5,
 #' crt_7, the lowest IL-10 dose), where noise alone often produces small
 #' reversals; these are kept out of the summary and listed separately
 #' (`qa$low_dose`, the "Just in case" section of the report).
@@ -21,12 +23,14 @@
 #' @param hsp60,r848 Does the study have HSP60 / R848 wells? Default `TRUE`.
 #' @param il10 Does the study have IL-10 wells (`il10_.02`, `il10_.1`,
 #'   `il10_.5`)? Default `FALSE`.
-#' @return A data frame with columns `higher`, `lower`, `tier`, `test`.
+#' @param inhibitor_fold An inhibitor well is flagged when it reads more than
+#'   this many times the LPS well. Default 2.
+#' @return A data frame with columns `higher`, `lower`, `tier`, `fold`, `test`.
 #' @examples
 #' luminex_contrasts()
 #' luminex_contrasts(il10 = TRUE)
 #' @export
-luminex_contrasts <- function(hsp60 = TRUE, r848 = TRUE, il10 = FALSE) {
+luminex_contrasts <- function(hsp60 = TRUE, r848 = TRUE, il10 = FALSE, inhibitor_fold = 2) {
   out <- data.frame(
     higher = c("hsp60", "r848", "lps", "lps",     "lps",   "lps",       "lps"),
     lower  = c("us",    "us",   "us",  "crt_5.5", "crt_6", "crt_6.5",   "crt_7"),
@@ -40,9 +44,15 @@ luminex_contrasts <- function(hsp60 = TRUE, r848 = TRUE, il10 = FALSE) {
       higher = "lps", lower = c("il10_.5", "il10_.1", "il10_.02"),
       tier = c("core", "core", "sensitive"), stringsAsFactors = FALSE))
   }
-  out$test <- paste0(out$lower, " > ", out$higher)
+  out$fold <- ifelse(out$lower == "us", 1, inhibitor_fold)
+  out$test <- .lqa_test_label(out$lower, out$higher, out$fold)
   rownames(out) <- NULL
   out
+}
+
+# "us > lps", "crt_5.5 > 2x lps"
+.lqa_test_label <- function(lower, higher, fold = 1) {
+  paste0(lower, " > ", ifelse(fold == 1, "", paste0(format(fold, trim = TRUE), "x ")), higher)
 }
 
 
@@ -109,10 +119,16 @@ luminex_dose_series <- function(il10 = FALSE) {
 #' @param tolerance Percent. A comparison is flagged only when the expected
 #'   higher well is more than `tolerance`\% below the other. Default 0 (any
 #'   reversal), matching the original script.
-#' @param dip_size In the dose-response check (values scored as
-#'   ln(well - US + 1)), a well is listed as a dip or spike when it is more
-#'   than this many units below or above BOTH neighbouring doses (default 1,
-#'   i.e. under about 37\% / over about 2.7x of both neighbours).
+#' @param inhibitor_fold A cortisol or IL-10 well is flagged only when it reads
+#'   more than this many times the LPS well (default 2).
+#' @param dip_size In the dose-response check (values as ln(MFI + 1)), a well
+#'   is listed as a dip or spike when it is more than this many units below or
+#'   above BOTH neighbouring doses (default 1, i.e. under about 37\% / over
+#'   about 2.7x of both neighbours) in at least `dip_cytokines` cytokines.
+#' @param dip_cytokines Number of cytokines a dip or spike must show up in
+#'   (default 2).
+#' @param plate_run A plate is listed when at least this many participants next
+#'   to each other on it (in id order) have the same problem (default 3).
 #' @param study,visit Labels for the report. Default: taken from the ids.
 #' @return An object of class `luminex_qa` (a list of data frames).
 #' @examples
@@ -134,11 +150,17 @@ luminex_qa <- function(data,
                        measure = "avg_mfi",
                        cv_threshold = 10,
                        tolerance = 0,
+                       inhibitor_fold = 2,
                        dip_size = 1,
+                       dip_cytokines = 2,
+                       plate_run = 3,
                        study = NULL,
                        visit = NULL) {
 
-  if (is.null(contrasts)) contrasts <- luminex_contrasts(hsp60 = hsp60, r848 = r848, il10 = il10)
+  if (is.null(contrasts)) contrasts <- luminex_contrasts(hsp60 = hsp60, r848 = r848, il10 = il10,
+                                                         inhibitor_fold = inhibitor_fold)
+  if (!"fold" %in% names(contrasts)) contrasts$fold <- 1
+  if (!"test" %in% names(contrasts)) contrasts$test <- .lqa_test_label(contrasts$lower, contrasts$higher, contrasts$fold)
   if (is.null(dose_series)) dose_series <- luminex_dose_series(il10 = il10)
 
   source_label <- if (is.character(data)) basename(data) else "data frame"
@@ -209,16 +231,16 @@ luminex_qa <- function(data,
   vals <- orig[!duplicated(orig[, c("id_num", "condition", "analyte")]), , drop = FALSE]
   missing <- .lqa_missing(vals, expected_conditions, analytes, expected_ids)
   cmp <- .lqa_contrasts(vals, contrasts, tolerance, cv_threshold, extra)
-  dose_all <- .lqa_dose(vals, dose_series, dip_size)
+  dose_all <- .lqa_dose(vals, dose_series, dip_size, dip_cytokines)
   dose <- dose_all$summary
-  patterns <- .lqa_patterns(vals, cmp, contrasts, dose_series, analytes)
-  plates <- .lqa_plates(orig, cmp)
 
   out <- list(
     settings = list(source = source_label, sheet = sheet, study = study, visit = visit,
                     hsp60 = hsp60, r848 = r848, il10 = il10,
                     analytes = analytes, measure = measure, cv_threshold = cv_threshold,
-                    tolerance = tolerance, contrasts = contrasts, dose_series = dose_series,
+                    tolerance = tolerance, inhibitor_fold = inhibitor_fold, dip_size = dip_size,
+                    dip_cytokines = dip_cytokines, plate_run = plate_run,
+                    contrasts = contrasts, dose_series = dose_series,
                     expected_conditions = expected_conditions, never_seen = never_seen,
                     switched_off = switched_off, expected_ids = expected_ids, run_at = Sys.time(),
                     fhrc_version = as.character(tryCatch(utils::packageVersion("fhrc"),
@@ -228,11 +250,11 @@ luminex_qa <- function(data,
                   plates = length(unique(stats::na.omit(raw$plate))), extra_rows = nrow(extra)),
     data = raw, long = orig, values = vals, extra_rows = extra,
     integrity = integrity, missing = missing,
-    contrasts = cmp, dose = dose, dose_points = dose_all$points, dose_issues = .lqa_dose_issues(dose),
-    patterns = patterns, plates = plates
+    contrasts = cmp, dose = dose, dose_points = dose_all$points, dose_issues = .lqa_dose_issues(dose)
   )
   out$summary <- .lqa_summary(out)
   out$low_dose <- .lqa_low_dose(out)
+  out$plates <- .lqa_plate_runs(out, plate_run)
   class(out) <- c("luminex_qa", "list")
   out
 }
@@ -385,7 +407,7 @@ print.luminex_qa <- function(x, ...) {
       lo <- vals[match(paste(people$id_num, ct$lower, a), key), ]
       res[[length(res) + 1]] <- data.frame(
         id_num = people$id_num, plate = people$plate, analyte = a,
-        test = ct$test, higher = ct$higher, lower = ct$lower, tier = ct$tier,
+        test = ct$test, higher = ct$higher, lower = ct$lower, tier = ct$tier, fold = ct$fold,
         higher_value = hi$value, lower_value = lo$value,
         higher_cv = hi$cv, lower_cv = lo$cv, stringsAsFactors = FALSE)
     }
@@ -394,7 +416,7 @@ print.luminex_qa <- function(x, ...) {
   d$diff <- d$higher_value - d$lower_value
   d$ratio <- d$higher_value / d$lower_value
   d$reversal_pct <- ifelse(d$diff < 0, 100 * (d$lower_value - d$higher_value) / d$lower_value, 0)
-  d$flag <- !is.na(d$diff) & d$higher_value < d$lower_value * (1 - tolerance / 100)
+  d$flag <- !is.na(d$diff) & d$higher_value * d$fold < d$lower_value * (1 - tolerance / 100)
   noise <- pmax(d$higher_cv, d$lower_cv, na.rm = TRUE)
   d$within_noise <- d$flag & !is.na(noise) & d$reversal_pct <= noise
   d$high_cv <- (!is.na(d$higher_cv) & d$higher_cv > cv_threshold) |
@@ -403,15 +425,7 @@ print.luminex_qa <- function(x, ...) {
   d[order(d$test, d$analyte, d$id_num), , drop = FALSE]
 }
 
-.lqa_slope <- function(x, y) {
-  ok <- !is.na(y) & y > 0
-  if (sum(ok) < 3) return(NA_real_)
-  x <- x[ok]; ly <- log10(y[ok])
-  sum((x - mean(x)) * (ly - mean(ly))) / sum((x - mean(x))^2)
-}
-
-# Dose-response scored the way the scoring step does it: each well minus the
-# participant's US well, negatives set to 0, then ln(x + 1); dose 0 = the
+# Dose-response points: ln(MFI + 1) with values below 0 set to 0; dose 0 = the
 # reference (LPS-only) well, then 1, 2, ... from the lowest to the highest dose.
 .lqa_dose_points <- function(vals, dose_series) {
   if (!length(dose_series)) return(data.frame())
@@ -422,12 +436,10 @@ print.luminex_qa <- function(x, ...) {
     s <- dose_series[[nm]]
     conds <- c(s$reference, names(sort(s$doses)))
     for (a in unique(vals$analyte)) {
-      us <- vals$value[match(paste(people, "us", a), key)]
       for (k in seq_along(conds)) {
         raw <- vals$value[match(paste(people, conds[k], a), key)]
-        sub <- pmax(raw - us, 0)
         out[[length(out) + 1]] <- data.frame(id_num = people, series = nm, analyte = a, step = k - 1,
-                                             condition = conds[k], score = log(sub + 1),
+                                             condition = conds[k], score = log(pmax(raw, 0) + 1),
                                              stringsAsFactors = FALSE)
       }
     }
@@ -435,23 +447,17 @@ print.luminex_qa <- function(x, ...) {
   do.call(rbind, out)
 }
 
-# one line of text per participant x series with a dose-response issue
+# one line of text per participant x series with a dip or spike, e.g. "dip at crt_7 (il1b, il6, tnfa)"
 .lqa_dose_issues <- function(ds) {
   empty <- data.frame(id_num = character(0), series = character(0), text = character(0), stringsAsFactors = FALSE)
   if (!length(ds) || !nrow(ds)) return(empty)
   out <- list()
   for (p in unique(ds$id_num[ds$issue])) {
     for (nm in unique(ds$series[ds$id_num == p & ds$issue])) {
-      r <- ds[ds$id_num == p & ds$series == nm, ]
-      parts <- character(0)
-      flat <- r$analyte[r$no_decrease]
-      if (length(flat)) parts <- c(parts, paste0("slope is positive in ", paste(flat, collapse = ", ")))
-      od <- r[r$odd != "", ]
-      if (nrow(od)) {
-        ev <- unlist(strsplit(od$odd, ", "))
-        an_of <- rep(od$analyte, lengths(strsplit(od$odd, ", ")))
-        for (e in unique(ev)) parts <- c(parts, paste0(e, " (", paste(an_of[ev == e], collapse = ", "), ")"))
-      }
+      od <- ds[ds$id_num == p & ds$series == nm & ds$odd != "", ]
+      ev <- unlist(strsplit(od$odd, ", "))
+      an_of <- rep(od$analyte, lengths(strsplit(od$odd, ", ")))
+      parts <- vapply(unique(ev), function(e) paste0(e, " (", paste(an_of[ev == e], collapse = ", "), ")"), "")
       out[[length(out) + 1]] <- data.frame(id_num = p, series = nm, text = paste(parts, collapse = "; "),
                                            stringsAsFactors = FALSE)
     }
@@ -460,7 +466,10 @@ print.luminex_qa <- function(x, ...) {
   do.call(rbind, out)
 }
 
-.lqa_dose <- function(vals, dose_series, dip_size = 1) {
+# A dip (spike) is one well more than `dip_size` below (above) BOTH neighbouring
+# doses on the ln(MFI + 1) scale; it is kept only when the same well dips (spikes)
+# in at least `dip_cytokines` cytokines.
+.lqa_dose <- function(vals, dose_series, dip_size = 1, dip_cytokines = 2) {
   pts <- .lqa_dose_points(vals, dose_series)
   if (!nrow(pts)) return(list(points = pts, summary = data.frame()))
   plate <- unique(vals[, c("id_num", "plate")]); plate <- plate[!duplicated(plate$id_num), ]
@@ -473,7 +482,6 @@ print.luminex_qa <- function(x, ...) {
       x <- g$step[ok]; y <- sc[ok]
       sum((x - mean(x)) * (y - mean(y))) / sum((x - mean(x))^2)
     } else NA_real_
-    # one well far below (dip) or far above (spike) BOTH neighbouring doses
     odd <- character(0)
     if (length(sc) >= 3) for (k in 2:(length(sc) - 1)) {
       if (anyNA(sc[c(k - 1, k, k + 1)])) next
@@ -486,168 +494,34 @@ print.luminex_qa <- function(x, ...) {
   })
   d <- do.call(rbind, res)
   rownames(d) <- NULL
+  # keep a dip / spike only when it shows up in enough cytokines
+  need <- min(dip_cytokines, length(unique(pts$analyte)))
+  ev <- strsplit(d$odd, ", ")
+  ev_key <- paste(rep(d$id_num, lengths(ev)), rep(d$series, lengths(ev)), unlist(ev), sep = "\r")
+  n_an <- table(ev_key)
+  d$odd <- vapply(seq_len(nrow(d)), function(i) {
+    e <- ev[[i]]
+    if (!length(e)) return("")
+    keep <- n_an[paste(d$id_num[i], d$series[i], e, sep = "\r")] >= need
+    paste(e[keep], collapse = ", ")
+  }, "")
   d$plate <- plate$plate[match(d$id_num, plate$id_num)]
-  d$no_decrease <- (d$slope > 0) %in% TRUE          # a positive slope; 0 is not a problem
-  d$issue <- d$no_decrease | d$odd != ""
+  d$issue <- d$odd != ""
   list(points = pts, summary = d[order(.lqa_idnum(d$id_num), d$id_num, d$series, d$analyte), ])
 }
 
-# count "core" violations for one participant's condition x analyte matrix
-.lqa_violations <- function(m, core, dose_series) {
-  v <- 0
-  for (i in seq_len(nrow(core))) {
-    h <- m[core$higher[i], ]; l <- m[core$lower[i], ]
-    v <- v + sum(h < l, na.rm = TRUE)
-  }
-  for (s in dose_series) {
-    doses <- sort(s$doses)
-    for (a in colnames(m)) {
-      y <- m[names(doses), a]
-      sl <- .lqa_slope(unname(doses), y)
-      if (!is.na(sl) && sl >= 0) v <- v + 1
-      # a step up of more than 25% when the dose goes up is implausible
-      v <- v + sum(y[-1] > 1.25 * y[-length(y)], na.rm = TRUE)
-    }
-  }
-  v
-}
-
-.lqa_patterns <- function(vals, cmp, contrasts, dose_series, analytes) {
-  empty <- data.frame(id_num = character(0), pattern = character(0), detail = character(0),
-                      stringsAsFactors = FALSE)
-  if (!nrow(cmp)) return(list(systematic = empty, swaps = empty, weak = empty))
-
-  # 1. same comparison reversed in every cytokine
-  f <- cmp[!is.na(cmp$diff), ]
-  if (!nrow(f)) {
-    empty_sys <- cbind(empty, tier = character(0), test = character(0), conds = character(0))
-    return(list(systematic = empty_sys, swaps = cbind(empty, conds = character(0)),
-                weak = cbind(empty, conds = character(0))))
-  }
-  agg <- stats::aggregate(cbind(n = 1, flagged = f$flag) ~ id_num + test + tier + higher + lower,
-                          data = f, FUN = sum)
-  sysm <- agg[agg$n >= 2 & agg$flagged == agg$n, ]
-  systematic <- if (nrow(sysm)) data.frame(
-    id_num = sysm$id_num, pattern = "reversed in every cytokine",
-    detail = paste0(sysm$test, " in all ", sysm$n, " cytokines", ifelse(sysm$tier == "sensitive", " (sensitive check)", "")),
-    tier = sysm$tier, test = sysm$test, conds = paste(sysm$lower, sysm$higher, sep = ","),
-    stringsAsFactors = FALSE) else
-      cbind(empty, tier = character(0), test = character(0), conds = character(0))
-
-  # 2. a stimulated well about as high as US in every cytokine
-  stim <- contrasts[contrasts$lower == "us", , drop = FALSE]
-  weak <- empty
-  if (nrow(stim)) {
-    # fold over US; US wells at or below 0 Net MFI give no usable fold and are skipped
-    w <- cmp[cmp$test %in% stim$test & is.finite(cmp$ratio) & cmp$ratio > 0, ]
-    w$lf <- log2(w$ratio)
-    w$z <- if (nrow(w)) stats::ave(w$lf, w$test, w$analyte, FUN = .lqa_robust_z) else numeric(0)
-    grp <- split(w, list(w$id_num, w$higher), drop = TRUE)
-    hit <- do.call(rbind, lapply(grp, function(g) {
-      if (nrow(g) >= 2 && isTRUE(all(g$z < -3))) data.frame(id_num = g$id_num[1], higher = g$higher[1],
-                                                    fold = max(g$ratio), stringsAsFactors = FALSE)
-    }))
-    if (!is.null(hit) && nrow(hit)) weak <- data.frame(
-      id_num = hit$id_num, pattern = "similar to us",
-      detail = paste0(hit$higher, " ~ us in all cytokines"),
-      conds = hit$higher, stringsAsFactors = FALSE)
-  }
-  if (!"conds" %in% names(weak)) weak$conds <- character(0)
-
-  # 3. would swapping two wells' labels explain the flags?
-  core <- contrasts[contrasts$tier == "core", , drop = FALSE]
-  swaps <- empty
-  key_people <- unique(vals$id_num)
-  for (p in key_people) {
-    v <- vals[vals$id_num == p, ]
-    conds <- unique(v$condition)
-    m <- matrix(NA_real_, length(conds), length(analytes), dimnames = list(conds, analytes))
-    m[cbind(v$condition, v$analyte)] <- v$value
-    need <- unique(c(core$higher, core$lower, unlist(lapply(dose_series, function(s) names(s$doses)))))
-    for (nn in setdiff(need, conds)) m <- rbind(m, matrix(NA_real_, 1, length(analytes), dimnames = list(nn, analytes)))
-    base <- .lqa_violations(m, core, dose_series)
-    if (base < 3) next
-    best <- base; best_pair <- NULL
-    pairs <- utils::combn(conds, 2)
-    for (k in seq_len(ncol(pairs))) {
-      m2 <- m; m2[pairs[, k], ] <- m[rev(pairs[, k]), ]
-      sc <- .lqa_violations(m2, core, dose_series)
-      if (sc < best) { best <- sc; best_pair <- pairs[, k] }
-    }
-    if (!is.null(best_pair) && best <= 1 && best <= base - 3) {
-      swaps <- rbind(swaps, data.frame(
-        id_num = p, pattern = "possible label swap",
-        detail = paste0(best_pair[1], " <-> ", best_pair[2], ": swapping these two wells drops the ",
-                        "violations from ", base, " to ", best, " - check the plate map"),
-        conds = paste(best_pair, collapse = ","), stringsAsFactors = FALSE))
-    }
-  }
-  if (!"conds" %in% names(swaps)) swaps$conds <- character(0)
-
-  list(systematic = systematic, swaps = swaps, weak = weak)
-}
-
-.lqa_plates <- function(orig, cmp) {
-  d <- orig[!is.na(orig$value) & orig$value > 0 & !is.na(orig$plate), ]
-  if (!nrow(d)) return(list(summary = data.frame(), shift = data.frame()))
-  d$lv <- log2(d$value)
-  overall <- stats::aggregate(lv ~ analyte + condition, d, stats::median)
-  per <- stats::aggregate(lv ~ plate + analyte + condition, d, stats::median)
-  per$dev <- per$lv - overall$lv[match(paste(per$analyte, per$condition), paste(overall$analyte, overall$condition))]
-  shift <- stats::aggregate(dev ~ plate, per, stats::median)
-  names(shift)[2] <- "median_log2_shift"
-  shift$fold <- 2^shift$median_log2_shift
-
-  people <- stats::aggregate(id_num ~ plate, unique(orig[, c("plate", "id_num")]), length)
-  names(people)[2] <- "participants"
-  core <- cmp[nrow(cmp) > 0 & cmp$tier == "core", ]
-  fl <- if (nrow(core) && any(!is.na(core$plate))) stats::aggregate(flag ~ plate + id_num, core, any) else data.frame(plate = character(0), flag = logical(0))
-  fl <- if (nrow(fl)) stats::aggregate(flag ~ plate, fl, sum) else data.frame(plate = character(0), flag = numeric(0))
-
-  s <- merge(people, shift, by = "plate", all.x = TRUE)
-  s <- merge(s, fl, by = "plate", all.x = TRUE)
-  names(s)[names(s) == "flag"] <- "participants_flagged"
-  s$participants_flagged[is.na(s$participants_flagged)] <- 0
-  s$plate_flag <- ifelse(abs(s$median_log2_shift) >= 1,
-                         paste0("values run ", round(ifelse(s$fold < 1, 1 / s$fold, s$fold), 1), "x ",
-                                ifelse(s$fold < 1, "lower", "higher"), " than other plates"), "")
-  list(summary = s[order(s$plate), ], by_condition = per)
-}
-
 # issue label for a comparison: "us > hsp60" stays as is; inhibitor wells are
-# grouped by inhibitor, e.g. crt_5.5 > lps -> "crt > lps", il10_.1 > lps -> "il10 > lps"
-.lqa_family <- function(lower, higher) {
-  ifelse(lower == "us", paste0(lower, " > ", higher), paste0(sub("_.*$", "", lower), " > ", higher))
+# grouped by inhibitor, e.g. crt_5.5 > 2x lps -> "crt > 2x lps", il10_.1 > 2x lps -> "il10 > 2x lps"
+.lqa_family <- function(lower, higher, fold = 1) {
+  .lqa_test_label(ifelse(lower == "us", lower, sub("_.*$", "", lower)), higher, fold)
 }
 
 # issues that are about the data file rather than the measured values
 .lqa_file_issues <- c("set-up", "unreadable id", "duplicated data", "unknown condition",
                       "different study prefix", "missing data", "plate")
 
-# the low-dose wells (crt_7, crt_6.5, lowest IL-10): lower well of the "sensitive" checks
-.lqa_low_wells <- function(x) unique(x$settings$contrasts$lower[x$settings$contrasts$tier == "sensitive"])
-
-# pairs of wells in the wrong order, as "<reads higher> > <reads lower>" plus the cytokines where that holds
-.lqa_swap_items <- function(x) {
-  pt <- x$patterns
-  out <- data.frame(id_num = character(0), test = character(0), cytokines = character(0), stringsAsFactors = FALSE)
-  if (!nrow(pt$swaps)) return(out)
-  for (i in seq_len(nrow(pt$swaps))) {
-    p <- pt$swaps$id_num[i]
-    pair <- strsplit(pt$swaps$conds[i], ",")[[1]]
-    v <- x$values[x$values$id_num == p & x$values$condition %in% pair & !is.na(x$values$value) & x$values$value > 0, ]
-    mlog <- tapply(log(v$value), v$condition, mean)
-    if (length(mlog) < 2) next          # values at or below 0: no way to say which reads higher
-    hi <- names(which.max(mlog)); lo <- setdiff(pair, hi)
-    vh <- v[v$condition == hi, ]; vl <- v[v$condition == lo, ]
-    cyt <- intersect(vh$analyte, vl$analyte)
-    cyt <- cyt[vh$value[match(cyt, vh$analyte)] > vl$value[match(cyt, vl$analyte)]]
-    if (!length(cyt)) next
-    out <- rbind(out, data.frame(id_num = p, test = paste0(hi, " > ", lo), cytokines = paste(cyt, collapse = ", "),
-                                 stringsAsFactors = FALSE))
-  }
-  out
-}
+# label for dips / spikes in the dose-response
+.lqa_dose_label <- "dose-response dip/spike"
 
 .lqa_summary <- function(x) {
   S <- x$settings
@@ -700,66 +574,48 @@ print.luminex_qa <- function(x, ...) {
     add_joined(mi[o], mt[o], rep("missing data", length(mi)))
   }
 
-  # -- comparisons at the regular wells (every reversal; low-dose wells are counted separately) --
+  # -- comparisons at the regular wells (low-dose wells are listed separately) --
   cc <- x$contrasts
-  pt <- x$patterns
   bp_id <- character(0); bp_txt <- character(0); bp_issue <- character(0)
-  # a stimulated well about as high as US in every cytokine
-  wk <- pt$weak
-  if (nrow(wk)) {
-    bp_id <- c(bp_id, wk$id_num)
-    bp_issue <- c(bp_issue, paste0(wk$conds, " & us similar"))
-    bp_txt <- c(bp_txt, wk$detail)
-  }
   if (nrow(cc) && any(!is.na(cc$diff))) {
     f <- cc[cc$flag & cc$tier == "core", ]
     for (p in unique(f$id_num)) {
       fp <- f[f$id_num == p, ]
       for (tt in intersect(S$contrasts$test, fp$test)) {
         r <- fp[fp$test == tt, ]
-        fam <- .lqa_family(r$lower[1], r$higher[1])
+        fam <- .lqa_family(r$lower[1], r$higher[1], r$fold[1])
         cyt <- paste(r$analyte, collapse = ", ")
         bp_id <- c(bp_id, p); bp_issue <- c(bp_issue, fam)
         bp_txt <- c(bp_txt, if (r$lower[1] == "us") cyt else paste0(r$lower[1], " (", cyt, ")"))
       }
     }
   }
-  # two wells in the wrong order not covered by a check above (those involving a low-dose well are listed with the low-dose wells)
-  sw <- .lqa_swap_items(x)
-  low <- .lqa_low_wells(x)
-  sw <- sw[!vapply(strsplit(sw$test, " > "), function(z) any(z %in% low), TRUE), , drop = FALSE]
-  flagged <- if (nrow(cc)) unique(paste(cc$id_num, cc$test)[cc$flag & cc$tier == "core"]) else character(0)
-  for (i in seq_len(nrow(sw))) {
-    p <- sw$id_num[i]; tt <- sw$test[i]
-    hl <- strsplit(tt, " > ")[[1]]
-    if (paste(p, tt) %in% flagged) next                       # already listed by its own check
-    ct <- S$contrasts[S$contrasts$lower == hl[1] & S$contrasts$higher == hl[2], ]
-    if (nrow(ct)) {                                           # a regular check: use its category (e.g. "crt > lps")
-      fam <- .lqa_family(hl[1], hl[2])
-      bp_id <- c(bp_id, p); bp_issue <- c(bp_issue, fam)
-      bp_txt <- c(bp_txt, if (hl[1] == "us") sw$cytokines[i] else paste0(hl[1], " (", sw$cytokines[i], ")"))
-    } else if (!any(bp_id == p & bp_issue == tt)) {
-      bp_id <- c(bp_id, p); bp_issue <- c(bp_issue, tt); bp_txt <- c(bp_txt, sw$cytokines[i])
-    }
-  }
   add_joined(bp_id, bp_txt, bp_issue)
 
-  # -- dose response (scored as in the scoring step) --------------------------
+  # -- dose response: dips and spikes ------------------------------------------
   di <- x$dose_issues
-  if (length(di) && nrow(di)) add_joined(di$id_num, paste0(di$series, ": ", di$text), rep("no dose-response", nrow(di)))
+  if (length(di) && nrow(di)) add_joined(di$id_num, paste0(di$series, ": ", di$text), rep(.lqa_dose_label, nrow(di)))
 
   empty <- data.frame(participant = character(0), issue = character(0), detail = character(0),
                       plate = character(0), stringsAsFactors = FALSE)
   if (!length(rows)) return(empty)
   td <- do.call(rbind, rows)
-  first <- c("set-up", "unreadable id", "different study prefix", "duplicated data", "unknown condition", "missing data")
-  last <- c("no dose-response")
-  rank <- ifelse(td$issue %in% first, match(td$issue, first),
-                 ifelse(td$issue %in% last, 100 + match(td$issue, last), 50))
+  rank <- .lqa_issue_rank(td$issue, S)
   grp <- ifelse(td$participant == "(file)", 0, ifelse(td$participant %in% c("(row)", "(plate)"), 2, 1))
   td <- td[order(grp, .lqa_idnum(td$participant), td$participant, rank, td$issue), ]
   rownames(td) <- NULL
   td
+}
+
+# order of issues: data-file problems, then the checks in the order of
+# luminex_contrasts() (us > hsp60, us > r848, us > lps, crt, il10), then dose-response
+.lqa_issue_rank <- function(issue, S) {
+  first <- c("set-up", "unreadable id", "different study prefix", "duplicated data", "unknown condition", "missing data")
+  fam <- unique(.lqa_family(S$contrasts$lower, S$contrasts$higher, S$contrasts$fold))
+  r <- ifelse(issue %in% first, match(issue, first),
+              ifelse(issue %in% fam, 20 + match(issue, fam),
+                     ifelse(issue == .lqa_dose_label, 100, 50)))
+  as.numeric(r)
 }
 
 # reversals at the low-dose wells (crt_7, crt_6.5, lowest IL-10): counted and
@@ -768,29 +624,43 @@ print.luminex_qa <- function(x, ...) {
   cc <- x$contrasts
   empty <- data.frame(participant = character(0), test = character(0), cytokines = character(0),
                       plate = character(0), stringsAsFactors = FALSE)
-  rows <- empty
-  if (nrow(cc)) {
-    f <- cc[cc$flag & cc$tier == "sensitive", ]
-    if (nrow(f)) {
-      g <- stats::aggregate(analyte ~ id_num + test + plate, f, function(z) paste(z, collapse = ", "))
-      rows <- data.frame(participant = g$id_num, test = g$test, cytokines = g$analyte, plate = g$plate,
-                         stringsAsFactors = FALSE)
-    }
-  }
-  # wells in the wrong order that involve a low-dose well
-  sw <- .lqa_swap_items(x)
-  low <- .lqa_low_wells(x)
-  sw <- sw[vapply(strsplit(sw$test, " > "), function(z) any(z %in% low), TRUE), , drop = FALSE]
-  pl <- unique(x$long[, c("id_num", "plate")])
-  for (i in seq_len(nrow(sw))) {
-    k <- which(rows$participant == sw$id_num[i] & rows$test == sw$test[i])
-    if (!length(k))
-      rows <- rbind(rows, data.frame(participant = sw$id_num[i], test = sw$test[i], cytokines = sw$cytokines[i],
-                                     plate = pl$plate[match(sw$id_num[i], pl$id_num)], stringsAsFactors = FALSE))
-  }
-  if (!nrow(rows)) return(empty)
+  if (!nrow(cc)) return(empty)
+  f <- cc[cc$flag & cc$tier == "sensitive", ]
+  if (!nrow(f)) return(empty)
+  f$plate[is.na(f$plate)] <- ""
+  g <- stats::aggregate(analyte ~ id_num + test + plate, f, function(z) paste(z, collapse = ", "))
+  rows <- data.frame(participant = g$id_num, test = g$test, cytokines = g$analyte, plate = g$plate,
+                     stringsAsFactors = FALSE)
   ord <- match(rows$test, x$settings$contrasts$test); ord[is.na(ord)] <- 0
   rows <- rows[order(.lqa_idnum(rows$participant), rows$participant, ord), ]
   rownames(rows) <- NULL
   rows
+}
+
+# plates where `min_run` or more participants next to each other (in id order on
+# that plate) share the same problem in their values
+.lqa_plate_runs <- function(x, min_run = 3) {
+  empty <- data.frame(plate = character(0), issue = character(0), n = integer(0),
+                      participants = character(0), stringsAsFactors = FALSE)
+  sm <- x$summary
+  sm <- sm[!sm$issue %in% .lqa_file_issues & grepl("^[0-9]+(_V[0-9]+)?$", sm$participant), , drop = FALSE]
+  pl <- unique(x$long[!is.na(x$long$plate) & x$long$plate != "", c("id_num", "plate")])
+  if (!nrow(sm) || !nrow(pl)) return(empty)
+  issues <- unique(sm$issue)
+  issues <- issues[order(.lqa_issue_rank(issues, x$settings), issues)]
+  out <- list()
+  for (p in sort(unique(pl$plate))) {
+    ids <- unique(pl$id_num[pl$plate == p])
+    ids <- ids[order(.lqa_idnum(ids), ids)]
+    for (iss in issues) {
+      r <- rle(ids %in% sm$participant[sm$issue == iss])
+      ends <- cumsum(r$lengths); starts <- ends - r$lengths + 1
+      for (k in which(r$values & r$lengths >= min_run))
+        out[[length(out) + 1]] <- data.frame(plate = p, issue = iss, n = r$lengths[k],
+                                             participants = paste(ids[starts[k]:ends[k]], collapse = ", "),
+                                             stringsAsFactors = FALSE)
+    }
+  }
+  if (!length(out)) return(empty)
+  do.call(rbind, out)
 }

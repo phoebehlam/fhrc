@@ -4,21 +4,26 @@
 \alias{luminex_contrasts}
 \title{Expected stimulation / inhibition comparisons for Luminex QA}
 \usage{
-luminex_contrasts(hsp60 = TRUE, r848 = TRUE, il10 = FALSE)
+luminex_contrasts(hsp60 = TRUE, r848 = TRUE, il10 = FALSE, inhibitor_fold = 2)
 }
 \arguments{
 \item{hsp60, r848}{Does the study have HSP60 / R848 wells? Default `TRUE`.}
 
 \item{il10}{Does the study have IL-10 wells (`il10_.02`, `il10_.1`,
 `il10_.5`)? Default `FALSE`.}
+
+\item{inhibitor_fold}{An inhibitor well is flagged when it reads more than
+this many times the LPS well. Default 2.}
 }
 \value{
-A data frame with columns `higher`, `lower`, `tier`, `test`.
+A data frame with columns `higher`, `lower`, `tier`, `fold`, `test`.
 }
 \description{
 Each row is one check: within a participant, the `higher` well should have
-more cytokine than the `lower` well. A participant is flagged when the
-reverse is true. `tier = "sensitive"` marks the low-dose checks (crt_6.5,
+more cytokine than the `lower` well. A stimulated well is flagged when US
+reads higher; an inhibitor well (cortisol, IL-10) is flagged only when it
+reads more than `inhibitor_fold` times the LPS well (column `fold`).
+`tier = "sensitive"` marks the low-dose checks (crt_6.5,
 crt_7, the lowest IL-10 dose), where noise alone often produces small
 reversals; these are kept out of the summary and listed separately
 (`qa$low_dose`, the "Just in case" section of the report).

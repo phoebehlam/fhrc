@@ -17,7 +17,10 @@ luminex_qa(
   measure = "avg_mfi",
   cv_threshold = 10,
   tolerance = 0,
+  inhibitor_fold = 2,
   dip_size = 1,
+  dip_cytokines = 2,
+  plate_run = 3,
   study = NULL,
   visit = NULL
 )
@@ -51,10 +54,19 @@ high CV in the flag details (default 10).}
 higher well is more than `tolerance`\% below the other. Default 0 (any
 reversal), matching the original script.}
 
-\item{dip_size}{In the dose-response check (values scored as
-ln(well - US + 1)), a well is listed as a dip or spike when it is more
-than this many units below or above BOTH neighbouring doses (default 1,
-i.e. under about 37\% / over about 2.7x of both neighbours).}
+\item{inhibitor_fold}{A cortisol or IL-10 well is flagged only when it reads
+more than this many times the LPS well (default 2).}
+
+\item{dip_size}{In the dose-response check (values as ln(MFI + 1)), a well
+is listed as a dip or spike when it is more than this many units below or
+above BOTH neighbouring doses (default 1, i.e. under about 37\% / over
+about 2.7x of both neighbours) in at least `dip_cytokines` cytokines.}
+
+\item{dip_cytokines}{Number of cytokines a dip or spike must show up in
+(default 2).}
+
+\item{plate_run}{A plate is listed when at least this many participants next
+to each other on it (in id order) have the same problem (default 3).}
 
 \item{study, visit}{Labels for the report. Default: taken from the ids.}
 }
