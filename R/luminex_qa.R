@@ -521,7 +521,7 @@ print.luminex_qa <- function(x, ...) {
                       "different study prefix", "missing data", "plate")
 
 # label for dips / spikes in the dose-response
-.lqa_dose_label <- "dose-response dip/spike"
+.lqa_dose_label <- "sus dose-response"
 
 .lqa_summary <- function(x) {
   S <- x$settings

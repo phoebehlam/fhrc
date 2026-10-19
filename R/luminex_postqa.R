@@ -12,15 +12,21 @@
 #' are looked at the way the scoring step sees them: negatives set to 0, the
 #' participant's US well subtracted, negatives set to 0 again, then ln(x + 1).
 #'
-#' A participant is tagged when, as scored:
+#' Tagged participants are shown in two groups: inhibition slopes (problems
+#' with the LPS, cortisol and IL-10 wells) and cytokine production (problems
+#' with the LPS, R848 and HSP60 wells, which make up the stimulated composite:
+#' each cytokine scored as below, z-scored within stimulant across all
+#' participants, then averaged across cytokines). A participant is tagged when,
+#' as scored:
 #' \describe{
-#'   \item{scores 0}{a stimulated or inhibitor well comes out as 0 in at least
+#'   \item{sus 0}{a stimulated or inhibitor well comes out as 0 in at least
 #'     `dip_cytokines` cytokines, either because it is about 0 as measured
 #'     (`zero_mfi` MFI or less) or because it is below US.}
-#'   \item{us replicates disagree}{the US well's replicate CV is above `us_cv`\%
+#'   \item{non-zero us large cv}{the US well's replicate CV is above `us_cv`\%
 #'     while US is at least `us_min` MFI (US is subtracted from every well).}
-#'   \item{dose-response dip/spike}{one dose well is more than `dip_size` below
-#'     (above) both neighbouring doses in at least `dip_cytokines` cytokines.}
+#'   \item{sus dose-response}{one dose well is more than `dip_size` below
+#'     (a dip) or above (a spike) both neighbouring doses in at least
+#'     `dip_cytokines` cytokines.}
 #'   \item{crt > 2x lps}{an inhibitor well reads more than `inhibitor_fold`
 #'     times the LPS well in at least `dip_cytokines` cytokines.}
 #' }
@@ -35,10 +41,17 @@
 #'   \item inhibitor wells above `inhibitor_fold` x LPS: set LPS to NA; if the
 #'     inhibitor wells then still rise with dose, set them to NA too.
 #' }
+#' Before step 2, for a participant with a US problem (wells below US, or US
+#' replicates that disagree), the other US runs in the `repeats_sheet` (the
+#' original run, repeats, interassay) are tried in place of the US in this
+#' sheet. If one of them removes every US problem, the plan is "use other us"
+#' (that run's values replace the US well) instead of ignoring US or setting
+#' wells to NA. When several do, the one leaving the fewest problems is used.
 #'
-#' **Changing the plan.** List a participant in `na`, `ignore_us` or `keep`
-#' and what you list replaces the default plan for that participant (only list
-#' the participants you disagree with). `keep` means leave the participant as is.
+#' **Changing the plan.** List a participant in `na`, `ignore_us`,
+#' `use_other_us` or `keep` and what you list replaces the default plan for that
+#' participant (only list the participants you disagree with). `keep` means
+#' leave the participant as is.
 #'
 #' @param data Path to the master `.xlsx`, or a data frame.
 #' @param sheet Sheet name (default `"final master"`).
@@ -47,7 +60,14 @@
 #'   prefix, e.g. `c("1139_V1_crt_7", "MHS_1066_V1_r848")`.
 #' @param ignore_us Participants whose US well is treated as 0, e.g.
 #'   `c("2066_V2", "2067_V2")`.
+#' @param use_other_us Participants whose US well takes the values of another
+#'   run of it in the `repeats_sheet`, used even if US problems remain. Give the
+#'   participant (`"1066_V1"`: the run leaving the fewest problems) or the
+#'   participant and the sheet's row number (`c("1066_V1" = 169)`: that run).
 #' @param keep Participants to leave as they are (no default plan).
+#' @param repeats_sheet Where to look for other US runs: a sheet name in the
+#'   same file (default `"for master"`, skipped if the file has no such sheet),
+#'   or a data frame of that sheet. `NULL` to skip.
 #' @param inhibitor_fold,dip_size,dip_cytokines As in [luminex_qa()].
 #' @param zero_mfi A well at or below this MFI (after negatives are set to 0)
 #'   counts as about 0 (default 5).
@@ -70,7 +90,9 @@ luminex_postqa <- function(data,
                            il10 = FALSE,
                            na = NULL,
                            ignore_us = NULL,
+                           use_other_us = NULL,
                            keep = NULL,
+                           repeats_sheet = "for master",
                            inhibitor_fold = 2,
                            dip_size = 1,
                            dip_cytokines = 2,
@@ -137,6 +159,34 @@ luminex_postqa <- function(data,
             inhibitor_fold = inhibitor_fold, dip_size = dip_size, dip_cytokines = dip_cytokines,
             zero_mfi = zero_mfi, us_cv = us_cv, us_min = us_min, run_at = Sys.time())
 
+  # ---- other US runs (the "for master" sheet: original, repeats, interassay) ----------
+  alt_raw <- NULL; alt_us <- NULL
+  if (!is.null(repeats_sheet)) {
+    ar <- NULL
+    if (is.data.frame(repeats_sheet)) {
+      ar <- repeats_sheet
+      S$repeats_sheet <- "repeats sheet"
+    } else if (is.character(data) && is.character(repeats_sheet)) {
+      S$repeats_sheet <- repeats_sheet
+      if (!repeats_sheet %in% openxlsx::getSheetNames(data)) {
+        S$alt_note <- sprintf("No '%s' sheet in this file, so other US runs were not checked.", repeats_sheet)
+      } else if (!identical(repeats_sheet, sheet)) {
+        ar <- openxlsx::read.xlsx(data, sheet = repeats_sheet)
+      }
+    }
+    if (!is.null(ar) && "id" %in% names(ar) && all(paste0(analytes, "_avg_mfi") %in% names(ar))) {
+      ar <- as.data.frame(ar, stringsAsFactors = FALSE)
+      ar <- ar[!is.na(ar$id) & trimws(ar$id) != "", , drop = FALSE]
+      ar$id <- trimws(as.character(ar$id))
+      ar$.row <- seq_len(nrow(ar)) + 1
+      if (!"plate" %in% names(ar)) ar$plate <- NA_character_
+      ar <- cbind(ar, .lqa_parse_ids(ar$id)[, c("study", "id_num", "visit", "condition", "round", "parsed")])
+      ar <- ar[ar$parsed & ar$condition == "us" & ar$visit %in% visits, , drop = FALSE]
+      if (length(visits) > 1) ar$id_num <- paste0(ar$id_num, "_", ar$visit)
+      if (nrow(ar)) { alt_raw <- ar; alt_us <- .lqa_long(ar, analytes, "avg_mfi") }
+    }
+  }
+
   # ---- missing & data entry (compact) --------------------------------------------
   integrity <- .lqa_integrity(raw, expected_conditions, unparsed, study, visit)
   long <- .lqa_long(raw, analytes, "avg_mfi")
@@ -153,29 +203,33 @@ luminex_postqa <- function(data,
   S$people <- people
 
   # ---- the plan: default, replaced by the team's choices where given ------------------
-  default <- .lpq_default_plan(vals, S, wid)
-  user <- .lpq_user_plan(na, ignore_us, keep, people, wid)
+  default <- .lpq_default_plan(vals, S, wid, alt_us)
+  user <- .lpq_user_plan(na, ignore_us, keep, people, wid, use_other_us, alt_us, vals, S)
   plan <- default[!default$participant %in% user$participant, , drop = FALSE]
   plan <- rbind(plan, user)
   plan <- plan[order(.lqa_idnum(plan$participant), plan$participant, plan$set_by != "you",
-                     match(plan$action, c("ignore us", "na", "keep"))), , drop = FALSE]
+                     match(plan$action, c("use other us", "ignore us", "na", "keep"))), , drop = FALSE]
   rownames(plan) <- NULL
 
   # ---- before and after the plan -------------------------------------------------------
-  vals_after <- .lpq_apply_long(vals, plan)
+  vals_after <- .lpq_apply_long(vals, plan, alt_us)
   ignored <- unique(plan$participant[plan$action == "ignore us"])
   before <- .lpq_problems(vals, S)
   after <- .lpq_problems(vals_after, S, us_ignored = ignored)
   scored <- .lpq_scored(vals, vals_after, S)
   slopes <- .lpq_slopes(scored, S)
+  composites <- .lpq_composites(scored, S)
 
   tagged <- unique(c(before$participant, plan$participant))
   tagged <- tagged[order(.lqa_idnum(tagged), tagged)]
+  sections <- .lpq_sections(before, plan, vals, S)
 
-  out <- list(settings = S, data = raw, fixed = .lpq_apply_df(original, plan), values = vals, values_after = vals_after,
+  out <- list(settings = S, data = raw, fixed = .lpq_apply_df(original, plan, alt_raw, S$repeats_sheet),
+              alt_us = alt_us, values = vals, values_after = vals_after,
               entry = entry, integrity = integrity, missing = missing,
               problems = before, problems_after = after, plan = plan, default_plan = default,
-              scored = scored, slopes = slopes, tagged = tagged)
+              scored = scored, slopes = slopes, composites = composites, tagged = tagged,
+              tagged_inhibition = sections$inhibition, tagged_production = sections$production)
   class(out) <- c("luminex_postqa", "list")
   out
 }
@@ -191,7 +245,8 @@ print.luminex_postqa <- function(x, ...) {
   p <- x$plan
   if (nrow(p)) {
     cat("  plan:\n")
-    for (i in seq_len(nrow(p))) cat("   ", p$participant[i], "|", p$action[i], "|", p$id[i], "|", p$set_by[i], "\n")
+    for (i in seq_len(nrow(p))) cat("   ", p$participant[i], "|", p$action[i], "|", p$id[i],
+                                    if (!is.na(p$from[i])) paste0("<- ", p$from[i], " (row ", p$from_row[i], ")"), "|", p$set_by[i], "\n")
   }
   cat("  run luminex_postqa_report() for the report; add export = TRUE once the plan is final.\n")
   invisible(x)
@@ -200,14 +255,27 @@ print.luminex_postqa <- function(x, ...) {
 
 # the plan applied to the master sheet (every row and column kept, plus a `fix` column):
 #   na        every cytokine value of the well (MFI, replicates, concentration, CV) -> NA
+#   use other us  the US well's cytokine values replaced by those of another run of it
+#                 (a row of the repeats sheet)
 #   ignore us the participant's US well *_avg_mfi -> 0, so subtracting US changes nothing
 #   keep      nothing
-.lpq_apply_df <- function(data, plan) {
+.lpq_apply_df <- function(data, plan, alt_raw = NULL, alt_sheet = "for master") {
   data <- as.data.frame(data, stringsAsFactors = FALSE)
   ids <- trimws(as.character(data$id))
   data$fix <- NA_character_
   an <- sub("_avg_mfi$", "", grep("_avg_mfi$", names(data), value = TRUE))
   val_cols <- grep(paste0("^(", paste(an, collapse = "|"), ")_"), names(data), value = TRUE)
+  for (k in which(plan$action == "use other us")) {
+    i <- which(ids == plan$id[k])
+    j <- if (is.null(alt_raw)) integer(0) else which(alt_raw$.row %in% plan$from_row[k])
+    if (!length(i) || !length(j)) next
+    for (cc in intersect(val_cols, names(alt_raw))) {
+      x <- alt_raw[[cc]][j[1]]
+      data[[cc]][i] <- if (is.numeric(data[[cc]])) suppressWarnings(as.numeric(x)) else as.character(x)
+    }
+    if ("plate" %in% names(data) && "plate" %in% names(alt_raw)) data$plate[i] <- as.character(alt_raw$plate[j[1]])
+    data$fix[i] <- paste0("us values taken from '", plan$from[k], "' (", alt_sheet, " row ", plan$from_row[k], ")")
+  }
   for (k in which(plan$action == "ignore us")) {
     i <- which(ids == plan$id[k])
     data[i, paste0(an, "_avg_mfi")] <- 0
@@ -225,17 +293,53 @@ print.luminex_postqa <- function(x, ...) {
 # ---- internal helpers ---------------------------------------------------------------
 
 .lpq_empty_plan <- function() {
-  data.frame(participant = character(0), action = character(0), id = character(0),
-             set_by = character(0), why = character(0), stringsAsFactors = FALSE)
+  data.frame(participant = character(0), action = character(0), id = character(0), from = character(0),
+             from_row = integer(0), set_by = character(0), why = character(0), stringsAsFactors = FALSE)
 }
 
-.lpq_row <- function(p, action, id, why, set_by = "default") {
-  data.frame(participant = p, action = action, id = id, set_by = set_by, why = why, stringsAsFactors = FALSE)
+.lpq_row <- function(p, action, id, why, set_by = "default", from = NA_character_, from_row = NA_integer_) {
+  data.frame(participant = p, action = action, id = id, from = from, from_row = as.integer(from_row),
+             set_by = set_by, why = why, stringsAsFactors = FALSE)
+}
+
+# a participant's US rows replaced by another run's (alt: long table of that run)
+.lpq_put_us <- function(vals, us_id, alt_rows) {
+  cols <- intersect(c("value", "mfi", "rep1", "rep2", "cv", "conc_raw", "conc", "plate"), names(vals))
+  i <- which(vals$id == us_id)
+  j <- match(vals$analyte[i], alt_rows$analyte)
+  for (cc in cols) vals[[cc]][i] <- alt_rows[[cc]][j]
+  vals
+}
+
+# another run of the US well that removes every US problem, or NULL
+.lpq_other_us <- function(p, vals, S, alt_us, us_id, must_resolve = TRUE) {
+  if (is.null(alt_us) || is.na(us_id)) return(NULL)
+  cand <- alt_us[alt_us$id_num == p, ]
+  if (!nrow(cand)) return(NULL)
+  v0 <- vals[vals$id_num == p, ]
+  cur <- v0[v0$condition == "us", ]
+  best <- NULL
+  for (rw in unique(cand$excel_row)) {
+    cc <- cand[cand$excel_row == rw, ]
+    if (all(is.na(cc$value))) next
+    a <- cc$value[match(cur$analyte, cc$analyte)]
+    if (all((is.na(a) & is.na(cur$value)) | (!is.na(a) & !is.na(cur$value) & abs(a - cur$value) < 1e-9))) next  # the run already used
+    pr <- .lpq_problems(.lpq_put_us(v0, us_id, cc), S)
+    if (must_resolve && any(pr$type %in% c("below_us", "us_cv"))) next
+    if (is.null(best) || nrow(pr) < best$n)
+      best <- list(id = cc$id[1], row = rw, plate = cc$plate[1], round = cc$round[1], n = nrow(pr))
+  }
+  best
 }
 
 # the same plan as .lpq_apply_df(), on the long values table
-.lpq_apply_long <- function(vals, plan) {
+.lpq_apply_long <- function(vals, plan, alt_us = NULL) {
   if (!nrow(plan)) return(vals)
+  for (k in which(plan$action == "use other us")) {
+    if (is.null(alt_us)) next
+    a <- alt_us[alt_us$excel_row %in% plan$from_row[k], ]
+    if (nrow(a)) vals <- .lpq_put_us(vals, plan$id[k], a)
+  }
   cols <- intersect(c("value", "mfi", "rep1", "rep2", "cv", "conc_raw", "conc"), names(vals))
   i <- vals$id %in% plan$id[plan$action == "ignore us"]
   vals$value[i] <- 0; vals$mfi[i] <- 0
@@ -321,13 +425,13 @@ print.luminex_postqa <- function(x, ...) {
     paste(vapply(names(g), function(l) paste0(paste(g[[l]], collapse = ", "), " (", l, ")"), ""), collapse = "; ")
   }
   z <- pr[pr$type %in% c("zero", "below_us"), ]
-  if (nrow(z)) out[[length(out) + 1]] <- data.frame(issue = "scores 0", detail = grouped(
+  if (nrow(z)) out[[length(out) + 1]] <- data.frame(issue = "sus 0", detail = grouped(
     z$well, paste0(ifelse(z$type == "zero", "about 0 as measured", "below us"), ": ", z$cytokines)), stringsAsFactors = FALSE)
   u <- pr[pr$type == "us_cv", ]
-  if (nrow(u)) out[[length(out) + 1]] <- data.frame(issue = "us replicates disagree", detail = u$extra[1],
+  if (nrow(u)) out[[length(out) + 1]] <- data.frame(issue = "non-zero us large cv", detail = u$extra[1],
                                                     stringsAsFactors = FALSE)
   d <- pr[pr$type %in% c("dip", "spike"), ]
-  if (nrow(d)) out[[length(out) + 1]] <- data.frame(issue = "dose-response dip/spike", detail = paste(
+  if (nrow(d)) out[[length(out) + 1]] <- data.frame(issue = "sus dose-response", detail = paste(
     paste0(d$series, ": ", d$type, " at ", d$well, " (", d$cytokines, ")"), collapse = "; "), stringsAsFactors = FALSE)
   a <- pr[pr$type == "above_ref", ]
   for (nm in unique(a$series)) {
@@ -339,14 +443,15 @@ print.luminex_postqa <- function(x, ...) {
   do.call(rbind, out)
 }
 
-.lpq_default_plan <- function(vals, S, wid) {
+.lpq_default_plan <- function(vals, S, wid, alt_us = NULL) {
   plan <- .lpq_empty_plan()
   idof <- function(p, cnd) wid$id[wid$id_num == p & wid$condition == cnd][1]
-  add <- function(p, action, cnd, why) {
+  add <- function(p, action, cnd, why, from = NA_character_, from_row = NA_integer_) {
     i <- idof(p, cnd)
     if (is.na(i) || any(plan$participant == p & plan$action == action & plan$id == i)) return(invisible())
-    plan <<- rbind(plan, .lpq_row(p, action, i, why))
+    plan <<- rbind(plan, .lpq_row(p, action, i, why, from = from, from_row = from_row))
   }
+  applied <- function() .lpq_apply_long(vals, plan, alt_us)
   # 1-2: wells about 0, wells below US, US replicates that disagree
   pr <- .lpq_problems(vals, S)
   for (p in unique(pr$participant)) {
@@ -354,9 +459,22 @@ print.luminex_postqa <- function(x, ...) {
     for (i in which(r$type == "zero")) add(p, "na", r$well[i], paste0("about 0 as measured (", r$cytokines[i], ")"))
     below <- r[r$type == "below_us", ]
     cvp <- r[r$type == "us_cv", ]
+    if (nrow(below) || nrow(cvp)) {
+      other <- .lpq_other_us(p, vals, S, alt_us, idof(p, "us"))
+      if (!is.null(other)) {
+        why <- c(if (nrow(below)) paste0(paste(below$well, collapse = ", "), " below us"),
+                 if (nrow(cvp)) paste0("non-zero us large cv (", cvp$extra[1], ")"))
+        where <- paste0(S$repeats_sheet, " row ", other$row,
+                        if (!is.na(other$plate) && nzchar(other$plate)) paste0(", ", sub("\\.xlsx$", "", other$plate)))
+        add(p, "use other us", "us", paste0(paste(why, collapse = "; "), "; the us from '",
+                                            sub("^[A-Za-z]+_", "", other$id), "' (", where, ") resolves this"),
+            from = other$id, from_row = other$row)
+        next
+      }
+    }
     if (nrow(below) >= 2 || nrow(cvp)) {
       why <- c(if (nrow(below) >= 2) paste0(nrow(below), " wells below us (", paste(below$well, collapse = ", "), ")"),
-               if (nrow(cvp)) paste0("us replicates disagree (", cvp$extra[1], ")"))
+               if (nrow(cvp)) paste0("non-zero us large cv (", cvp$extra[1], ")"))
       add(p, "ignore us", "us", paste(why, collapse = "; "))
     } else if (nrow(below) == 1) {
       add(p, "na", below$well, paste0("below us (", below$cytokines, ")"))
@@ -365,13 +483,13 @@ print.luminex_postqa <- function(x, ...) {
   ign <- function() unique(plan$participant[plan$action == "ignore us"])
   # 3: dips and spikes on the scored scale
   for (pass in 1:3) {
-    pr <- .lpq_problems(.lpq_apply_long(vals, plan), S, us_ignored = ign())
+    pr <- .lpq_problems(applied(), S, us_ignored = ign())
     d <- pr[pr$type %in% c("dip", "spike"), ]
     if (!nrow(d)) break
     for (i in seq_len(nrow(d))) add(d$participant[i], "na", d$well[i], paste0(d$type[i], " at ", d$well[i], " (", d$cytokines[i], ")"))
   }
   # 4: inhibitor wells above k x LPS -> LPS NA; if the inhibitor wells still rise with dose -> those NA too
-  v1 <- .lpq_apply_long(vals, plan)
+  v1 <- applied()
   pr <- .lpq_problems(v1, S, us_ignored = ign())
   a <- pr[pr$type == "above_ref", ]
   for (p in unique(a$participant)) {
@@ -384,7 +502,7 @@ print.luminex_postqa <- function(x, ...) {
         paste0(paste(grp[[cy]], collapse = ", "), " > ", S$inhibitor_fold, "x ", s$reference, " (", cy, ")"), ""), collapse = "; "))
     }
   }
-  v2 <- .lpq_apply_long(vals, plan)
+  v2 <- applied()
   k <- min(S$dip_cytokines, length(S$analytes))
   for (p in unique(a$participant)) for (nm in unique(a$series[a$participant == p])) {
     s <- S$dose_series[[nm]]
@@ -402,7 +520,8 @@ print.luminex_postqa <- function(x, ...) {
 }
 
 # the team's choices: replace the default plan for the participants they name
-.lpq_user_plan <- function(na, ignore_us, keep, people, wid) {
+.lpq_user_plan <- function(na, ignore_us, keep, people, wid, use_other_us = NULL, alt_us = NULL,
+                           vals = NULL, S = NULL) {
   plan <- .lpq_empty_plan()
   norm <- function(x) tolower(sub("^[A-Za-z]+_", "", trimws(x)))
   well_norm <- norm(wid$id)
@@ -429,6 +548,28 @@ print.luminex_postqa <- function(x, ...) {
     if (!length(u)) stop("No us well for ", x, call. = FALSE)
     plan <- rbind(plan, .lpq_row(p, "ignore us", u[1], "", "you"))
   }
+  if (length(use_other_us)) {
+    sheet <- if (is.null(S$repeats_sheet)) "for master" else S$repeats_sheet
+    if (is.null(alt_us)) stop("use_other_us: no '", sheet, "' sheet with us rows to take another run from.", call. = FALSE)
+    nm <- names(use_other_us); if (is.null(nm)) nm <- rep("", length(use_other_us))
+    for (k in seq_along(use_other_us)) {
+      who <- if (nzchar(nm[k])) nm[k] else as.character(use_other_us[[k]])
+      row <- if (nzchar(nm[k])) suppressWarnings(as.integer(use_other_us[[k]])) else NA_integer_
+      p <- find_person(who)
+      u <- wid$id[wid$id_num == p & wid$condition == "us"]
+      if (!length(u)) stop("No us well for ", who, call. = FALSE)
+      if (is.na(row)) {
+        o <- .lpq_other_us(p, vals, S, alt_us, u[1], must_resolve = FALSE)
+        if (is.null(o)) stop("use_other_us: no other us run for ", who, " in '", sheet, "'.", call. = FALSE)
+        row <- o$row; oid <- o$id
+      } else {
+        a <- alt_us[alt_us$excel_row == row & alt_us$id_num == p, ]
+        if (!nrow(a)) stop("use_other_us: row ", row, " of '", sheet, "' is not a us well of ", who, ".", call. = FALSE)
+        oid <- a$id[1]
+      }
+      plan <- rbind(plan, .lpq_row(p, "use other us", u[1], "", "you", from = oid, from_row = row))
+    }
+  }
   for (x in keep) {
     p <- find_person(x)
     plan <- rbind(plan, .lpq_row(p, "keep", "", "", "you"))
@@ -450,6 +591,53 @@ print.luminex_postqa <- function(x, ...) {
   b <- one(vals, character(0)); names(b)[4] <- "before"
   a <- one(vals_after, character(0)); names(a)[4] <- "after"
   merge(b, a, by = c("id_num", "condition", "analyte"), all = TRUE)
+}
+
+# stimulated composite per participant and stimulant, as in the scoring script:
+# scored value z-scored within stimulant and cytokine across all participants
+# (visits pooled), then averaged across cytokines; without and with the plan
+.lpq_composites <- function(scored, S) {
+  d <- scored[scored$condition %in% S$stims, , drop = FALSE]
+  if (!nrow(d)) return(data.frame(id_num = character(0), condition = character(0), before = numeric(0), after = numeric(0)))
+  zf <- function(x) {
+    m <- mean(x, na.rm = TRUE); s <- stats::sd(x, na.rm = TRUE)
+    if (!is.finite(s) || s == 0) rep(NA_real_, length(x)) else (x - m) / s
+  }
+  d$zb <- stats::ave(d$before, d$condition, d$analyte, FUN = zf)
+  d$za <- stats::ave(d$after, d$condition, d$analyte, FUN = zf)
+  mn <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
+  key <- paste(d$id_num, d$condition, sep = "\r")
+  out <- data.frame(id_num = d$id_num[!duplicated(key)], condition = d$condition[!duplicated(key)], stringsAsFactors = FALSE)
+  k <- paste(out$id_num, out$condition, sep = "\r")
+  out$before <- as.numeric(tapply(d$zb, key, mn)[k])
+  out$after <- as.numeric(tapply(d$za, key, mn)[k])
+  out
+}
+
+# which tagged participants go under inhibition slopes and which under cytokine production
+.lpq_sections <- function(pr, plan, vals, S) {
+  series <- unique(unlist(lapply(S$dose_series, function(s) c(s$reference, names(s$doses)))))
+  stim <- S$stims
+  well <- pr$well
+  inh <- pr$participant[pr$type %in% c("dip", "spike", "above_ref", "us_cv") |
+                          (pr$type %in% c("zero", "below_us") & well %in% series)]
+  prod <- pr$participant[pr$type == "us_cv" | (pr$type %in% c("zero", "below_us") & well %in% stim)]
+  cond <- vals$condition[match(plan$id, vals$id)]
+  us_act <- plan$action %in% c("ignore us", "use other us")
+  inh <- c(inh, plan$participant[us_act | (plan$action == "na" & cond %in% series)])
+  prod <- c(prod, plan$participant[us_act | (plan$action == "na" & cond %in% stim)])
+  rest <- setdiff(plan$participant, c(inh, prod))                # e.g. only "keep": list with the slopes
+  inh <- unique(c(inh, rest)); prod <- unique(prod)
+  list(inhibition = inh[order(.lqa_idnum(inh), inh)], production = prod[order(.lqa_idnum(prod), prod)])
+}
+
+# the problems that belong to each group, for the bullets
+.lpq_section_problems <- function(pr, S, section) {
+  series <- unique(unlist(lapply(S$dose_series, function(s) c(s$reference, names(s$doses)))))
+  if (section == "inhibition")
+    pr[pr$type %in% c("dip", "spike", "above_ref", "us_cv") | (pr$type %in% c("zero", "below_us") & pr$well %in% series), , drop = FALSE]
+  else
+    pr[pr$type == "us_cv" | (pr$type %in% c("zero", "below_us") & pr$well %in% S$stims), , drop = FALSE]
 }
 
 .lpq_slopes <- function(scored, S) {

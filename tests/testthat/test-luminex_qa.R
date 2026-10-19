@@ -23,7 +23,7 @@ test_that("planted swapped wells are stated as the broken order only", {
   expect_true(has("1003", "us > r848", "il1b, il6, tnfa"))
   expect_true(has("1003", "us > hsp60", "il1b, il6, tnfa"))
   # crt_5.5 / crt_7 swapped: shows up as a dip at crt_7, no wrong-order pair is listed
-  expect_true(has("1043", "dose-response dip/spike", "cortisol: dip at crt_7 (il1b, il6, tnfa)"))
+  expect_true(has("1043", "sus dose-response", "cortisol: dip at crt_7 (il1b, il6, tnfa)"))
   expect_false(any(grepl("^crt_[0-9.]+ > crt", c(sm$issue, qa$low_dose$test))))
 })
 
@@ -71,7 +71,7 @@ test_that("summary states problems only: no percentages, guesses or attributions
 test_that("no unplanted participant gets a data, bench-error or dose-response row", {
   planted <- c("1003", "1007", "1011", "1015", "1019", "1023", "1035", "1039", "1043", "1044", "1045", "1046")
   serious <- sm$issue %in% c("duplicated data", "unknown condition", "missing data", "us > r848", "us > lps",
-                             "crt > 2x lps", "il10 > 2x lps", "dose-response dip/spike")
+                             "crt > 2x lps", "il10 > 2x lps", "sus dose-response")
   got <- unique(sm$participant[serious & grepl("^[0-9]+$", sm$participant)])
   expect_setequal(got, planted)
 })
@@ -187,7 +187,7 @@ test_that("every reversal at the regular wells is in the summary; low-dose ones 
   }
   low <- qa$contrasts[qa$contrasts$flag & qa$contrasts$tier == "sensitive", ]
   expect_true(all(unique(low$id_num) %in% qa$low_dose$participant))
-  expect_false(any(grepl("crt_7|crt_6.5|il10_.02", sm$detail[sm$issue != "dose-response dip/spike"])))
+  expect_false(any(grepl("crt_7|crt_6.5|il10_.02", sm$detail[sm$issue != "sus dose-response"])))
   # every low-dose item involves a low-dose well
   expect_true(all(grepl("crt_7|crt_6\\.5|il10_\\.02", qa$low_dose$test)))
 })

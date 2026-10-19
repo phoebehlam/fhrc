@@ -118,3 +118,103 @@ test_that("report renders; data is exported only with export = TRUE and never ov
   expect_error(luminex_postqa_report(master, export = TRUE, export_file = "MHS master.xlsx", open = FALSE), "overwrite")
   expect_equal(openxlsx::read.xlsx(master, sheet = "final master")$il1b_avg_mfi, d$il1b_avg_mfi)
 })
+
+test_that("another US run from the 'for master' sheet is used only when it removes the US problems", {
+  fm <- luminex_example(study = "MHS")                       # "for master": original runs
+  cyt <- grep("^(il1b|il6|tnfa)_", names(fm), value = TRUE)
+  # 1020: a repeat of US read high, and that run was picked into the final master
+  rp <- fm[fm$id == "MHS_1020_V1_us", ]; rp$id <- "MHS_1020_V1_us_repeat"
+  for (a in c("il1b", "il6", "tnfa")) rp[[paste0(a, "_avg_mfi")]] <- fm[[paste0(a, "_avg_mfi")]][fm$id == "MHS_1020_V1_lps"] * 0.9
+  # 1046 (US and LPS swapped): its other US run reads just as high, so it does not help
+  r46 <- fm[fm$id == "MHS_1046_V1_us", ]; r46$id <- "MHS_1046_V1_us_repeat"; r46$il6_avg_mfi <- r46$il6_avg_mfi * 1.05
+  fm <- rbind(fm, rp, r46)
+  fin <- fm[!grepl("_repeat$", fm$id), ]
+  fin[fin$id == "MHS_1020_V1_us", cyt] <- rp[, cyt]
+
+  q <- luminex_postqa(fin, repeats_sheet = fm)
+  pl <- q$plan
+  expect_equal(pl$action[pl$participant == "1020"], "use other us")
+  expect_equal(pl$from[pl$participant == "1020"], "MHS_1020_V1_us")
+  expect_equal(fm$il1b_avg_mfi[pl$from_row[pl$participant == "1020"] - 1], fm$il1b_avg_mfi[fm$id == "MHS_1020_V1_us"])
+  expect_false(any(q$problems_after$participant == "1020"))
+  expect_false(any(pl$action[pl$participant == "1046"] == "use other us"))   # does not resolve: default stays
+  expect_true(plan_has(pl, "1046", "ignore us"))
+  # the exported sheet carries the other run's values
+  f <- q$fixed
+  expect_equal(f$il6_avg_mfi[f$id == "MHS_1020_V1_us"], fm$il6_avg_mfi[fm$id == "MHS_1020_V1_us"])
+  expect_true(grepl("us values taken from 'MHS_1020_V1_us'", f$fix[f$id == "MHS_1020_V1_us"]))
+  # without the other runs, the default is to ignore US
+  q0 <- luminex_postqa(fin, repeats_sheet = NULL)
+  expect_equal(q0$plan$action[q0$plan$participant == "1020"], "ignore us")
+  # the team can still overrule it
+  q1 <- luminex_postqa(fin, repeats_sheet = fm, ignore_us = "1020")
+  expect_equal(q1$plan$action[q1$plan$participant == "1020"], "ignore us")
+  # the run already in the final master is not offered as "other"
+  q2 <- luminex_postqa(fin, repeats_sheet = rbind(fin, r46))
+  expect_false(any(q2$plan$action == "use other us"))
+})
+
+test_that("from a file: the 'for master' sheet is read when present, and its absence is noted", {
+  dir <- tempfile("pq2"); dir.create(dir)
+  f1 <- file.path(dir, "with.xlsx"); f2 <- file.path(dir, "without.xlsx")
+  openxlsx::write.xlsx(list("for master" = d, "final master" = d), f1, rowNames = FALSE)
+  openxlsx::write.xlsx(list("final master" = d), f2, rowNames = FALSE)
+  expect_null(luminex_postqa(f1)$settings$alt_note)
+  expect_false(is.null(luminex_postqa(f1)$alt_us))
+  expect_match(luminex_postqa(f2)$settings$alt_note, "No 'for master' sheet")
+})
+
+test_that("use_other_us: the team can ask for another US run, by participant or by row", {
+  fm <- luminex_example(study = "MHS")
+  # 1046 (US and LPS swapped) has two other US runs that do not resolve its problems
+  r1 <- fm[fm$id == "MHS_1046_V1_us", ]; r1$id <- "MHS_1046_V1_us_repeat"; r1$il6_avg_mfi <- r1$il6_avg_mfi * 1.05
+  r2 <- r1; r2$id <- "MHS_1046_V1_us_repeat2"; r2$il6_avg_mfi <- r2$il6_avg_mfi * 0.5
+  fm <- rbind(fm, r1, r2)
+  fin <- fm[!grepl("_repeat", fm$id), ]
+  row_r1 <- which(fm$id == "MHS_1046_V1_us_repeat") + 1
+  # not proposed by default (does not resolve)
+  expect_false(any(luminex_postqa(fin, repeats_sheet = fm)$plan$action == "use other us"))
+  # by participant: the run that leaves the fewest problems
+  q <- luminex_postqa(fin, repeats_sheet = fm, use_other_us = "1046")
+  pl <- q$plan[q$plan$participant == "1046", ]
+  expect_equal(pl$action, "use other us")
+  expect_equal(pl$set_by, "you")
+  expect_true(pl$from %in% c("MHS_1046_V1_us_repeat", "MHS_1046_V1_us_repeat2"))
+  # by row: exactly that run
+  q <- luminex_postqa(fin, repeats_sheet = fm, use_other_us = c("1046" = row_r1))
+  pl <- q$plan[q$plan$participant == "1046", ]
+  expect_equal(pl$from, "MHS_1046_V1_us_repeat")
+  expect_equal(pl$from_row, row_r1)
+  expect_equal(q$fixed$il6_avg_mfi[q$fixed$id == "MHS_1046_V1_us"], r1$il6_avg_mfi)
+  expect_true(any(q$problems_after$participant == "1046"))      # used even though problems remain
+  expect_true(plan_has(q$plan, "1045", "ignore us"))             # others keep the default
+  # mistakes are explained
+  expect_error(luminex_postqa(fin, repeats_sheet = fm, use_other_us = c("1046" = 3)), "is not a us well")
+  expect_error(luminex_postqa(fin, repeats_sheet = fm, use_other_us = "1003"), "no other us run")
+  expect_error(luminex_postqa(fin, repeats_sheet = NULL, use_other_us = "1046"), "no 'for master' sheet")
+})
+
+test_that("stimulated composite follows the scoring script; tagged participants are split into two groups", {
+  # composite: scored value z-scored within stimulant and cytokine across everyone, then averaged over cytokines
+  s <- qa$scored[qa$scored$condition == "r848", ]
+  z <- function(x) (x - mean(x, na.rm = TRUE)) / stats::sd(x, na.rm = TRUE)
+  s$z <- stats::ave(s$before, s$analyte, FUN = z)
+  by_hand <- mean(s$z[s$id_num == "1005"], na.rm = TRUE)
+  cp <- qa$composites
+  expect_equal(cp$before[cp$id_num == "1005" & cp$condition == "r848"], by_hand)
+  expect_setequal(unique(cp$condition), c("lps", "r848", "hsp60"))
+  # 1039 (dip at crt_6.5) is only an inhibition-slope problem; 1003 (hsp60 and r848 below US) is in both
+  expect_true("1039" %in% qa$tagged_inhibition)
+  expect_false("1039" %in% qa$tagged_production)
+  expect_true(all(c("1003", "1044") %in% qa$tagged_production))
+  # one well below US that is r848 or hsp60 only: production only
+  d2 <- d
+  k <- d2$id == "MHS_1010_V1_hsp60"
+  for (a in c("il1b", "il6", "tnfa")) d2[[paste0(a, "_avg_mfi")]][k] <- d2[[paste0(a, "_avg_mfi")]][d2$id == "MHS_1010_V1_us"] * 0.8
+  q <- luminex_postqa(d2)
+  expect_true(plan_has(q$plan, "1010", "na", "hsp60"))
+  expect_true("1010" %in% q$tagged_production)
+  expect_false("1010" %in% q$tagged_inhibition)
+  # labels
+  expect_true(any(fhrc:::.lpq_issue_lines(qa$problems[qa$problems$participant == "1039", ], qa$settings)$issue == "sus dose-response"))
+})

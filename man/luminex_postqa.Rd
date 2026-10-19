@@ -12,7 +12,9 @@ luminex_postqa(
   il10 = FALSE,
   na = NULL,
   ignore_us = NULL,
+  use_other_us = NULL,
   keep = NULL,
+  repeats_sheet = "for master",
   inhibitor_fold = 2,
   dip_size = 1,
   dip_cytokines = 2,
@@ -36,7 +38,16 @@ prefix, e.g. `c("1139_V1_crt_7", "MHS_1066_V1_r848")`.}
 \item{ignore_us}{Participants whose US well is treated as 0, e.g.
 `c("2066_V2", "2067_V2")`.}
 
+\item{use_other_us}{Participants whose US well takes the values of another
+run of it in the `repeats_sheet`, used even if US problems remain. Give the
+participant (`"1066_V1"`: the run leaving the fewest problems) or the
+participant and the sheet's row number (`c("1066_V1" = 169)`: that run).}
+
 \item{keep}{Participants to leave as they are (no default plan).}
+
+\item{repeats_sheet}{Where to look for other US runs: a sheet name in the
+same file (default `"for master"`, skipped if the file has no such sheet),
+or a data frame of that sheet. `NULL` to skip.}
 
 \item{inhibitor_fold, dip_size, dip_cytokines}{As in [luminex_qa()].}
 
@@ -59,15 +70,21 @@ are looked at the way the scoring step sees them: negatives set to 0, the
 participant's US well subtracted, negatives set to 0 again, then ln(x + 1).
 }
 \details{
-A participant is tagged when, as scored:
+Tagged participants are shown in two groups: inhibition slopes (problems
+with the LPS, cortisol and IL-10 wells) and cytokine production (problems
+with the LPS, R848 and HSP60 wells, which make up the stimulated composite:
+each cytokine scored as below, z-scored within stimulant across all
+participants, then averaged across cytokines). A participant is tagged when,
+as scored:
 \describe{
-  \item{scores 0}{a stimulated or inhibitor well comes out as 0 in at least
+  \item{sus 0}{a stimulated or inhibitor well comes out as 0 in at least
     `dip_cytokines` cytokines, either because it is about 0 as measured
     (`zero_mfi` MFI or less) or because it is below US.}
-  \item{us replicates disagree}{the US well's replicate CV is above `us_cv`\%
+  \item{non-zero us large cv}{the US well's replicate CV is above `us_cv`\%
     while US is at least `us_min` MFI (US is subtracted from every well).}
-  \item{dose-response dip/spike}{one dose well is more than `dip_size` below
-    (above) both neighbouring doses in at least `dip_cytokines` cytokines.}
+  \item{sus dose-response}{one dose well is more than `dip_size` below
+    (a dip) or above (a spike) both neighbouring doses in at least
+    `dip_cytokines` cytokines.}
   \item{crt > 2x lps}{an inhibitor well reads more than `inhibitor_fold`
     times the LPS well in at least `dip_cytokines` cytokines.}
 }
@@ -82,10 +99,17 @@ A participant is tagged when, as scored:
   \item inhibitor wells above `inhibitor_fold` x LPS: set LPS to NA; if the
     inhibitor wells then still rise with dose, set them to NA too.
 }
+Before step 2, for a participant with a US problem (wells below US, or US
+replicates that disagree), the other US runs in the `repeats_sheet` (the
+original run, repeats, interassay) are tried in place of the US in this
+sheet. If one of them removes every US problem, the plan is "use other us"
+(that run's values replace the US well) instead of ignoring US or setting
+wells to NA. When several do, the one leaving the fewest problems is used.
 
-**Changing the plan.** List a participant in `na`, `ignore_us` or `keep`
-and what you list replaces the default plan for that participant (only list
-the participants you disagree with). `keep` means leave the participant as is.
+**Changing the plan.** List a participant in `na`, `ignore_us`,
+`use_other_us` or `keep` and what you list replaces the default plan for that
+participant (only list the participants you disagree with). `keep` means
+leave the participant as is.
 }
 \examples{
 qa <- luminex_postqa(luminex_example())

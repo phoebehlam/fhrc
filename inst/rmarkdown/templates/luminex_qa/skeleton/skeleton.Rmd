@@ -102,7 +102,7 @@ pos_plot <- local({
 is_pid <- grepl("^[0-9]+(_V[0-9]+)?$", sm$participant)
 all_ids <- unique(sm$participant[is_pid])
 file_issues <- c("set-up", "unreadable id", "duplicated data", "unknown condition", "different study prefix", "missing data", "plate")
-dose_label <- "dose-response dip/spike"
+dose_label <- "sus dose-response"
 pr <- qa$plates
 if (is.null(pr) || !is.data.frame(pr)) pr <- data.frame()
 inhib_fold <- unique(S$contrasts$fold[S$contrasts$lower != "us"])

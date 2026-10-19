@@ -25,8 +25,9 @@ luminex_postqa_report("C:/path/to/STUDY VISIT master file.xlsx", sheet = "final 
 ```
 
 Looks at the values the way the scoring step will (negatives to 0, US subtracted, ln),
-tags participants whose scores would go wrong, and proposes a plan (wells to set to NA,
-US to ignore). Review it with the wet-lab team, then run again listing only the
-participants you disagree with (`na`, `ignore_us`, `keep`) and `export = TRUE`: the whole
+tags participants whose inhibition slopes or stimulated cytokine composites would go wrong, and proposes a plan (wells to set to NA,
+US to ignore, or another US run from the "for master" sheet when that run removes the US
+problems). Review it with the wet-lab team, then run again listing only the
+participants you disagree with (`na`, `ignore_us`, `use_other_us`, `keep`) and `export = TRUE`: the whole
 "final master" sheet is saved next to the master with the plan applied (and a `fix`
 column), ready for scoring.
