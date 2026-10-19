@@ -6,7 +6,7 @@ output:
     toc: true
     toc_float:
       collapsed: false
-    toc_depth: 3
+    toc_depth: 2
     self_contained: true
     mathjax: null
     fig_retina: 1
@@ -92,7 +92,7 @@ h1.title { font-weight: 650; font-size: 28px; margin-bottom: 0; }
 h4.date { color: #52514e; font-weight: 400; font-size: 15px; margin-top: 4px; }
 h1:not(.title) { font-weight: 650; font-size: 24px; margin-top: 46px; padding-top: 14px; border-top: 1px solid #e1e0d9; }
 h2 { font-weight: 600; font-size: 19px; margin-top: 30px; }
-.section.participant > h3 { font-size: 18px; padding-top: 12px; border-top: 1px dashed #e1e0d9; }
+.section.participant > h2 { font-size: 18px; padding-top: 12px; border-top: 1px dashed #e1e0d9; }
 h3 { font-weight: 600; font-size: 17px; margin-top: 30px; }
 p, li { line-height: 1.55; }
 .none { color: #0b0b0b; }
@@ -158,7 +158,7 @@ measured_plot <- function(v, p, pos = pos_plot) {
     scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE),
                        expand = expansion(mult = c(0.03, 0.12))) +
     expand_limits(y = 0) + facet_wrap(~ analyte, nrow = 1, scales = "free_y") +
-    labs(x = NULL, y = "MFI", title = "As measured")
+    labs(x = NULL, y = "MFI", title = "raw mfi")
 }
 
 scored_plot <- function(p) {
@@ -197,7 +197,7 @@ scored_plot <- function(p) {
                        limits = c(min(pos_plot$x) - 0.3, max(pos_plot$x) + 0.7)) +
     scale_y_continuous(expand = expansion(mult = c(0.05, 0.3))) +
     expand_limits(y = 0) + facet_wrap(~ analyte, nrow = 1, scales = "free_y") +
-    labs(x = NULL, y = "ln(MFI - US + 1)", title = "As the scoring step will see it")
+    labs(x = NULL, y = "ln(MFI - US + 1)", title = "inhibition slope, after scoring")
 }
 
 composite_plot <- function(p) {
@@ -214,7 +214,7 @@ composite_plot <- function(p) {
     scale_x_continuous(breaks = pos_prod$x, labels = pos_prod$condition, limits = c(0.7, max(pos_prod$x) + 0.3)) +
     scale_y_continuous(expand = expansion(mult = c(0.1, 0.1))) +
     theme(axis.text.x = element_text(angle = 0, hjust = 0.5, colour = muted)) +
-    labs(x = NULL, y = "composite (z)", title = "Standardized composite")
+    labs(x = NULL, y = "composite (z)", title = "cytokine production, after scoring")
 }
 
 values_table <- function(v, p, keep = NULL) {
@@ -244,46 +244,28 @@ values_table <- function(v, p, keep = NULL) {
   tbl(w)
 }
 
-panel_head <- function(p, v, section) {
-  cat("\n\n### ", p, " {.participant}\n\n", sep = "")
+panel_head <- function(p, v) {
+  cat("\n\n## ", p, " {.participant}\n\n", sep = "")
   if (nrow(v)) cat(sprintf("<p class='note'>Plate: %s</p>\n", esc(paste(unique(short_plate(stats::na.omit(v$plate))), collapse = "; "))))
-  pr <- fhrc:::.lpq_section_problems(qa$problems[qa$problems$participant == p, ], S, section)
-  il <- fhrc:::.lpq_issue_lines(pr, S)
+  il <- fhrc:::.lpq_issue_lines(qa$problems[qa$problems$participant == p, ], S)
   items <- c(if (nrow(il)) paste0("<li><b>", esc(il$issue), ":</b> ", esc(il$detail), "</li>"),
              paste0("<li><b>plan:</b> ", esc(if (any(plan$participant == p)) plan_text(plan[plan$participant == p, ]) else "nothing to change"), "</li>"))
   cat("<ul>", paste(items, collapse = ""), "</ul>\n", sep = "")
 }
 ```
 
-## Inhibition slopes
-
-```{r inhibition, results = "asis", fig.width = 10, fig.height = 3.6}
-ids <- qa$tagged_inhibition
+```{r tagged, results = "asis", fig.width = 10, fig.height = 3.6}
+ids <- qa$tagged
 if (!length(ids)) none("None found.") else
-  cat("<p class='note'>Top row graphs are as measured, whereas bottom row graphs are with US subtracted, negative values imputed to 0, and then +1 and natural log transformed. Here the colored line is with the plan, and the grey line is without the plan.</p>\n")
+  cat("<p class='note'>top row graphs are as measured, whereas second row graphs are with us subtracted, negative values imputed to 0, and then +1 and natural log transformed. when cytokine production (lps, r848, hsp60) is affected, a third row graph shows each stimulant's standardized composite as in scoring: the second row values z-scored within each stimulant and cytokine across all participants, then averaged across cytokines. in each, the colored line is with the plan, and the grey line is without the plan.</p>\n")
 for (p in ids) {
   v <- qa$values[qa$values$id_num == p, ]
-  panel_head(p, v, "inhibition")
+  panel_head(p, v)
   if (!nrow(v) || all(is.na(v$mfi))) { cat("<p class='note'>No values for this participant.</p>\n"); next }
   show_plot(measured_plot(v, p))
   show_plot(scored_plot(p))
+  if (p %in% qa$tagged_production) show_plot(composite_plot(p))
   values_table(v, p)
-}
-```
-
-## Cytokine production
-
-```{r production, results = "asis", fig.width = 10, fig.height = 3.6}
-ids <- qa$tagged_production
-if (!length(ids)) none("None found.") else
-  cat("<p class='note'>Top row graphs are as measured. The bottom graph is each stimulant's standardized composite, computed as in scoring: US subtracted, negative values imputed to 0, +1 and natural log transformed, z-scored within each stimulant and cytokine across all participants, then averaged across cytokines. The blue line is with the plan, and the grey line is without the plan.</p>\n")
-for (p in ids) {
-  v <- qa$values[qa$values$id_num == p, ]
-  panel_head(p, v, "production")
-  if (!nrow(v) || all(is.na(v$mfi))) { cat("<p class='note'>No values for this participant.</p>\n"); next }
-  show_plot(measured_plot(v, p, pos_prod))
-  show_plot(composite_plot(p))
-  values_table(v, p, keep = c("us", pos_prod$condition))
 }
 ```
 
@@ -320,6 +302,7 @@ rules <- c(
   sprintf("<b>sus 0</b>: a well comes out as 0 after scoring in at least %d cytokines, either because it is about 0 as measured (%s MFI or less) or because it is below US.", k, S$zero_mfi),
   sprintf("<b>non-zero us large cv</b>: the US replicates' CV is above %s%% in a cytokine where US is at least %s MFI (low US values often have large CVs and are not counted).", S$us_cv, S$us_min),
   sprintf("<b>sus dose-response</b>: one dose well is more than %s below (dip) or above (spike) both neighbouring doses on the ln scale, in at least %d cytokines.", S$dip_size, k),
+  "<b>line slope</b>: the slope scores before and after plan are just lm, not the extracted slopes from mlm models.",
   sprintf("<b>crt &gt; %s lps</b> (and il10): an inhibitor well reads more than %s the LPS well in at least %d cytokines.", fold_lab, fold_lab, k),
   sprintf("<b>Default plan</b>: a well about 0 as measured is set to NA; for a US problem, another US run from the '%s' sheet is used if it removes the US problems, otherwise US is ignored (two or more wells below US, or a non-zero US with a large CV) or the one well below US is set to NA; a dose-response dip or spike is set to NA; inhibitor wells above %s LPS set LPS to NA, and if they still rise with dose they are set to NA too.",
           if (is.null(S$repeats_sheet)) "for master" else S$repeats_sheet, fold_lab))
