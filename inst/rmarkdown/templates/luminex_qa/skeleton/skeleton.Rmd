@@ -87,7 +87,7 @@ idnum <- function(x) suppressWarnings(as.numeric(sub("_.*$", "", x)))
 pos_plot <- local({
   stims <- setdiff(unique(S$contrasts$higher[S$contrasts$lower == "us"]), "lps")
   stims <- intersect(stims, S$expected_conditions)
-  out <- data.frame(condition = stims, x = seq_along(stims), line = NA_character_, stringsAsFactors = FALSE)
+  out <- data.frame(condition = stims, x = seq_along(stims), line = rep(NA_character_, length(stims)), stringsAsFactors = FALSE)
   xx <- length(stims)
   blocks <- lapply(S$dose_series, function(s) c(s$reference, names(sort(s$doses))))
   if (!length(blocks) && "lps" %in% S$expected_conditions) blocks <- list(lps = "lps")
@@ -355,7 +355,8 @@ if (!length(tagged_ids)) none("None found.")
 panel <- function(p, issues, details) {
   v <- qa$values[qa$values$id_num == p, ]
   cat("\n\n## ", p, " {.participant}\n\n", sep = "")
-  if (nrow(v)) cat(sprintf("<p class='note'>Plate: %s</p>\n", htmltools::htmlEscape(short_plate(v$plate[1]))))
+  if (nrow(v) && !is.na(v$plate[1]) && nzchar(trimws(v$plate[1])))
+    cat(sprintf("<p class='note'>Plate: %s</p>\n", htmltools::htmlEscape(short_plate(v$plate[1]))))
   cat("<ul>", paste0("<li><b>", htmltools::htmlEscape(issues), ":</b> ",
                      htmltools::htmlEscape(details), "</li>", collapse = ""), "</ul>\n", sep = "")
   if (!nrow(v)) return(invisible())

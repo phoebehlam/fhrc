@@ -241,3 +241,24 @@ test_that("cort = 3 uses crt_5.5, crt_6, crt_6.5 only; cort = 4 adds crt_7", {
   # cort = 4 but no crt_7 wells: noted as never seen
   expect_true("crt_7" %in% luminex_postqa(d3, cort = 4)$settings$never_seen)
 })
+
+test_that("a study without hsp60 and r848, an 'ID' column, and '_rerun' rows all work", {
+  p <- fhrc:::.lqa_parse_ids(c("CON_500_V1_lps_rerun", "CON_500_V1_us_rerun2", "CON_500_V1_crt_6"))
+  expect_equal(p$condition, c("lps", "us", "crt_6"))
+  expect_equal(p$round, c("rerun", "rerun2", "original"))
+  d3 <- luminex_example(study = "CON", cort = 3)
+  d3 <- d3[!grepl("_(hsp60|r848)$", d3$id), ]
+  fm <- d3
+  r <- fm[fm$id == "CON_1020_V1_us", ]; r$id <- "CON_1020_V1_us_rerun"; fm <- rbind(fm, r)
+  names(fm)[names(fm) == "id"] <- "ID"
+  fin <- d3
+  for (a in c("il1b", "il6", "tnfa")) fin[fin$id == "CON_1020_V1_us", paste0(a, "_avg_mfi")] <- fin[fin$id == "CON_1020_V1_lps", paste0(a, "_avg_mfi")]
+  q <- luminex_postqa(fin, hsp60 = FALSE, r848 = FALSE, cort = 3, repeats_sheet = fm)
+  expect_true(plan_has(q$plan, "1020", "use other us"))
+  qq <- luminex_qa(fm, hsp60 = FALSE, r848 = FALSE, cort = 3)
+  expect_false(any(grepl("rerun", qq$integrity$unexpected$condition)))
+  skip_if_not(rmarkdown::pandoc_available())
+  dir <- tempfile("con"); dir.create(dir)
+  expect_true(file.exists(luminex_postqa_report(q, output_dir = dir, open = FALSE)[["report"]]))
+  expect_true(file.exists(luminex_qa_report(qq, output_dir = dir, open = FALSE)))
+})

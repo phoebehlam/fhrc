@@ -57,7 +57,7 @@ esc <- htmltools::htmlEscape
 # x positions: other stimulants as single dots, then each dose series from its reference well
 pos_plot <- local({
   stims <- setdiff(S$stims, "lps")
-  out <- data.frame(condition = stims, x = seq_along(stims), line = NA_character_, stringsAsFactors = FALSE)
+  out <- data.frame(condition = stims, x = seq_along(stims), line = rep(NA_character_, length(stims)), stringsAsFactors = FALSE)
   xx <- length(stims)
   blocks <- lapply(S$dose_series, function(s) c(s$reference, names(sort(s$doses))))
   if (!length(blocks) && "lps" %in% S$expected_conditions) blocks <- list(lps = "lps")
@@ -130,7 +130,7 @@ tbl(qa$entry)
 ```{r detail_fun}
 # x positions for the cytokine production charts: lps, r848, hsp60
 pos_prod <- data.frame(condition = intersect(c("lps", "r848", "hsp60"), S$stims), stringsAsFactors = FALSE)
-pos_prod$x <- seq_len(nrow(pos_prod)); pos_prod$line <- NA_character_
+pos_prod$x <- seq_len(nrow(pos_prod)); pos_prod$line <- rep(NA_character_, nrow(pos_prod))
 
 measured_plot <- function(v, p, pos = pos_plot) {
   pv <- merge(expand.grid(condition = pos$condition, analyte = an, stringsAsFactors = FALSE),
@@ -248,7 +248,8 @@ values_table <- function(v, p, keep = NULL) {
 
 panel_head <- function(p, v) {
   cat("\n\n## ", p, " {.participant}\n\n", sep = "")
-  if (nrow(v)) cat(sprintf("<p class='note'>Plate: %s</p>\n", esc(paste(unique(short_plate(stats::na.omit(v$plate))), collapse = "; "))))
+  pl <- unique(short_plate(stats::na.omit(v$plate))); pl <- pl[nzchar(trimws(pl))]
+  if (length(pl)) cat(sprintf("<p class='note'>Plate: %s</p>\n", esc(paste(pl, collapse = "; "))))
   il <- fhrc:::.lpq_issue_lines(qa$problems[qa$problems$participant == p, ], S)
   items <- c(if (nrow(il)) paste0("<li><b>", esc(il$issue), ":</b> ", esc(il$detail), "</li>"),
              paste0("<li><b>plan:</b> ", esc(if (any(plan$participant == p)) plan_text(plan[plan$participant == p, ]) else "nothing to change"), "</li>"))

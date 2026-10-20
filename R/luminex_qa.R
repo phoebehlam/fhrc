@@ -106,7 +106,7 @@ luminex_dose_series <- function(il10 = FALSE, cort = 4) {
 #' 4-digit id number, `V` plus the visit number, then the condition.
 #' This is the pre-repeats QA: run it on the "for master" tab before any
 #' repeats are done. If rows ending in `_repeat`, `_repeat2`, ... or
-#' `_interassay` are present they are set aside and only the original run is
+#' `_rerun`, or `_interassay` are present they are set aside and only the original run is
 #' checked.
 #'
 #' @param data Path to the master `.xlsx`, or a data frame already read in.
@@ -183,6 +183,7 @@ luminex_qa <- function(data,
     raw <- as.data.frame(data, stringsAsFactors = FALSE)
     sheet <- NA_character_
   }
+  raw <- .lqa_id_col(raw)
   if (!"id" %in% names(raw)) stop("The sheet needs an `id` column.", call. = FALSE)
   raw <- raw[!is.na(raw$id) & trimws(raw$id) != "", , drop = FALSE]
   raw$id <- trimws(as.character(raw$id))
@@ -315,7 +316,7 @@ print.luminex_qa <- function(x, ...) {
 }
 
 .lqa_parse_ids <- function(id) {
-  pat <- "^([A-Za-z]+)_([0-9]{3,4})_([Vv][0-9]+)_(.+?)(?:_((?i)repeat[0-9]*|interassay))?$"
+  pat <- "^([A-Za-z]+)_([0-9]{3,4})_([Vv][0-9]+)_(.+?)(?:_((?i)repeat[0-9]*|rerun[0-9]*|interassay))?$"
   m <- regmatches(id, regexec(pat, id, perl = TRUE))
   ok <- lengths(m) == 6
   get <- function(k) vapply(seq_along(m), function(i) if (ok[i]) m[[i]][k] else NA_character_, "")
@@ -684,4 +685,12 @@ print.luminex_qa <- function(x, ...) {
   if (length(cort) != 1 || is.na(cort) || !cort %in% c(3L, 4L))
     stop("`cort` must be 3 (crt_5.5, crt_6, crt_6.5) or 4 (crt_5.5, crt_6, crt_6.5, crt_7).", call. = FALSE)
   cort
+}
+
+# the id column, whatever its case ("id", "ID", "Id")
+.lqa_id_col <- function(d) {
+  d <- as.data.frame(d, stringsAsFactors = FALSE)
+  k <- which(tolower(trimws(names(d))) == "id")
+  if (length(k) && !"id" %in% names(d)) names(d)[k[1]] <- "id"
+  d
 }

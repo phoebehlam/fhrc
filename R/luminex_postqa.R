@@ -116,6 +116,7 @@ luminex_postqa <- function(data,
     raw <- as.data.frame(data, stringsAsFactors = FALSE)
     sheet <- NA_character_
   }
+  raw <- .lqa_id_col(raw)
   if (!"id" %in% names(raw)) stop("The sheet needs an `id` column.", call. = FALSE)
   original <- raw                     # the whole sheet as read, for the export
   raw <- raw[!is.na(raw$id) & trimws(raw$id) != "", , drop = FALSE]
@@ -179,8 +180,8 @@ luminex_postqa <- function(data,
         ar <- openxlsx::read.xlsx(data, sheet = repeats_sheet)
       }
     }
+    if (!is.null(ar)) ar <- .lqa_id_col(ar)
     if (!is.null(ar) && "id" %in% names(ar) && all(paste0(analytes, "_avg_mfi") %in% names(ar))) {
-      ar <- as.data.frame(ar, stringsAsFactors = FALSE)
       ar <- ar[!is.na(ar$id) & trimws(ar$id) != "", , drop = FALSE]
       ar$id <- trimws(as.character(ar$id))
       ar$.row <- seq_len(nrow(ar)) + 1

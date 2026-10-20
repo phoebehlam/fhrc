@@ -55,7 +55,7 @@ luminex_qa_report <- function(qa, output_dir = NULL, output_file = NULL,
   if (is.null(output_dir)) output_dir <- getwd()
   if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
   if (is.null(output_file)) {
-    tag <- paste(stats::na.omit(c(qa$settings$study, qa$settings$visit)), collapse = "_")
+    tag <- paste(stats::na.omit(c(qa$settings$study, gsub(" & ", "_", qa$settings$visit))), collapse = "_")
     output_file <- paste0(if (nzchar(tag)) paste0(tag, "_") else "", "luminex_qa_", Sys.Date(), ".html")
   }
 
