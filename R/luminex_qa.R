@@ -23,6 +23,8 @@
 #' @param hsp60,r848 Does the study have HSP60 / R848 wells? Default `TRUE`.
 #' @param il10 Does the study have IL-10 wells (`il10_.02`, `il10_.1`,
 #'   `il10_.5`)? Default `FALSE`.
+#' @param cort Number of cortisol doses: `4` (default; crt_5.5, crt_6, crt_6.5,
+#'   crt_7) or `3` (crt_5.5, crt_6, crt_6.5).
 #' @param inhibitor_fold An inhibitor well is flagged when it reads more than
 #'   this many times the LPS well. Default 2.
 #' @return A data frame with columns `higher`, `lower`, `tier`, `fold`, `test`.
@@ -30,7 +32,8 @@
 #' luminex_contrasts()
 #' luminex_contrasts(il10 = TRUE)
 #' @export
-luminex_contrasts <- function(hsp60 = TRUE, r848 = TRUE, il10 = FALSE, inhibitor_fold = 2) {
+luminex_contrasts <- function(hsp60 = TRUE, r848 = TRUE, il10 = FALSE, cort = 4, inhibitor_fold = 2) {
+  cort <- .lqa_check_cort(cort)
   out <- data.frame(
     higher = c("hsp60", "r848", "lps", "lps",     "lps",   "lps",       "lps"),
     lower  = c("us",    "us",   "us",  "crt_5.5", "crt_6", "crt_6.5",   "crt_7"),
@@ -39,6 +42,7 @@ luminex_contrasts <- function(hsp60 = TRUE, r848 = TRUE, il10 = FALSE, inhibitor
   )
   if (!isTRUE(hsp60)) out <- out[out$higher != "hsp60", ]
   if (!isTRUE(r848)) out <- out[out$higher != "r848", ]
+  if (cort == 3) out <- out[out$lower != "crt_7", ]
   if (isTRUE(il10)) {
     out <- rbind(out, data.frame(
       higher = "lps", lower = c("il10_.5", "il10_.1", "il10_.02"),
@@ -67,16 +71,20 @@ luminex_contrasts <- function(hsp60 = TRUE, r848 = TRUE, il10 = FALSE, inhibitor
 #' dose. IL-10 labels are the concentration, so `il10_.5` is the highest dose.
 #'
 #' @param il10 Include the IL-10 series? Default `FALSE`.
+#' @param cort Number of cortisol doses: `4` (default; crt_5.5 to crt_7) or `3`
+#'   (crt_5.5, crt_6, crt_6.5).
 #' @return A named list; each element has `reference`, `doses`, `unit`.
 #' @examples
 #' luminex_dose_series(il10 = TRUE)
 #' @export
-luminex_dose_series <- function(il10 = FALSE) {
+luminex_dose_series <- function(il10 = FALSE, cort = 4) {
+  cort <- .lqa_check_cort(cort)
   out <- list(
     cortisol = list(reference = "lps",
                     doses = c(crt_7 = -7, crt_6.5 = -6.5, crt_6 = -6, crt_5.5 = -5.5),
                     unit = "log10 M")
   )
+  if (cort == 3) out$cortisol$doses <- out$cortisol$doses[names(out$cortisol$doses) != "crt_7"]
   if (isTRUE(il10)) {
     out$il10 <- list(reference = "lps",
                      doses = c(il10_.02 = log10(0.02), il10_.1 = log10(0.1), il10_.5 = log10(0.5)),
@@ -105,6 +113,8 @@ luminex_dose_series <- function(il10 = FALSE) {
 #' @param sheet Sheet name when `data` is a path (default `"for master"`).
 #' @param hsp60,r848 Does the study have HSP60 / R848 wells? Default `TRUE`.
 #' @param il10 Does the study have IL-10 wells? Default `FALSE`.
+#' @param cort Number of cortisol doses: `4` (default; crt_5.5, crt_6, crt_6.5,
+#'   crt_7) or `3` (crt_5.5, crt_6, crt_6.5; any crt_7 rows are set aside).
 #' @param analytes Cytokines to check. Default: detected from the
 #'   `*_avg_mfi` columns.
 #' @param contrasts,dose_series Advanced: replace the default checks
@@ -143,6 +153,7 @@ luminex_qa <- function(data,
                        hsp60 = TRUE,
                        r848 = TRUE,
                        il10 = FALSE,
+                       cort = 4,
                        analytes = NULL,
                        contrasts = NULL,
                        dose_series = NULL,
@@ -157,11 +168,12 @@ luminex_qa <- function(data,
                        study = NULL,
                        visit = NULL) {
 
-  if (is.null(contrasts)) contrasts <- luminex_contrasts(hsp60 = hsp60, r848 = r848, il10 = il10,
+  cort <- .lqa_check_cort(cort)
+  if (is.null(contrasts)) contrasts <- luminex_contrasts(hsp60 = hsp60, r848 = r848, il10 = il10, cort = cort,
                                                          inhibitor_fold = inhibitor_fold)
   if (!"fold" %in% names(contrasts)) contrasts$fold <- 1
   if (!"test" %in% names(contrasts)) contrasts$test <- .lqa_test_label(contrasts$lower, contrasts$higher, contrasts$fold)
-  if (is.null(dose_series)) dose_series <- luminex_dose_series(il10 = il10)
+  if (is.null(dose_series)) dose_series <- luminex_dose_series(il10 = il10, cort = cort)
 
   source_label <- if (is.character(data)) basename(data) else "data frame"
   if (is.character(data)) {
@@ -196,6 +208,7 @@ luminex_qa <- function(data,
   off <- character(0)
   if (!isTRUE(hsp60)) off <- c(off, "hsp60")
   if (!isTRUE(r848)) off <- c(off, "r848")
+  if (cort == 3) off <- c(off, "crt_7")
   is_off <- raw$condition %in% off | (!isTRUE(il10) & grepl("^il10", raw$condition))
   switched_off <- if (any(is_off)) sort(unique(raw$condition[is_off])) else character(0)
   raw <- raw[!is_off, , drop = FALSE]
@@ -236,7 +249,7 @@ luminex_qa <- function(data,
 
   out <- list(
     settings = list(source = source_label, sheet = sheet, study = study, visit = visit,
-                    hsp60 = hsp60, r848 = r848, il10 = il10,
+                    hsp60 = hsp60, r848 = r848, il10 = il10, cort = cort,
                     analytes = analytes, measure = measure, cv_threshold = cv_threshold,
                     tolerance = tolerance, inhibitor_fold = inhibitor_fold, dip_size = dip_size,
                     dip_cytokines = dip_cytokines, plate_run = plate_run,
@@ -663,4 +676,12 @@ print.luminex_qa <- function(x, ...) {
   }
   if (!length(out)) return(empty)
   do.call(rbind, out)
+}
+
+# number of cortisol doses: 3 (crt_5.5, crt_6, crt_6.5) or 4 (plus crt_7)
+.lqa_check_cort <- function(cort) {
+  cort <- suppressWarnings(as.integer(cort))
+  if (length(cort) != 1 || is.na(cort) || !cort %in% c(3L, 4L))
+    stop("`cort` must be 3 (crt_5.5, crt_6, crt_6.5) or 4 (crt_5.5, crt_6, crt_6.5, crt_7).", call. = FALSE)
+  cort
 }

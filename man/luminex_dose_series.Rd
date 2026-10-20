@@ -4,10 +4,13 @@
 \alias{luminex_dose_series}
 \title{Inhibitor dose series for Luminex QA}
 \usage{
-luminex_dose_series(il10 = FALSE)
+luminex_dose_series(il10 = FALSE, cort = 4)
 }
 \arguments{
 \item{il10}{Include the IL-10 series? Default `FALSE`.}
+
+\item{cort}{Number of cortisol doses: `4` (default; crt_5.5 to crt_7) or `3`
+(crt_5.5, crt_6, crt_6.5).}
 }
 \value{
 A named list; each element has `reference`, `doses`, `unit`.

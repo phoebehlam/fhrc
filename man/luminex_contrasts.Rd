@@ -4,13 +4,22 @@
 \alias{luminex_contrasts}
 \title{Expected stimulation / inhibition comparisons for Luminex QA}
 \usage{
-luminex_contrasts(hsp60 = TRUE, r848 = TRUE, il10 = FALSE, inhibitor_fold = 2)
+luminex_contrasts(
+  hsp60 = TRUE,
+  r848 = TRUE,
+  il10 = FALSE,
+  cort = 4,
+  inhibitor_fold = 2
+)
 }
 \arguments{
 \item{hsp60, r848}{Does the study have HSP60 / R848 wells? Default `TRUE`.}
 
 \item{il10}{Does the study have IL-10 wells (`il10_.02`, `il10_.1`,
 `il10_.5`)? Default `FALSE`.}
+
+\item{cort}{Number of cortisol doses: `4` (default; crt_5.5, crt_6, crt_6.5,
+crt_7) or `3` (crt_5.5, crt_6, crt_6.5).}
 
 \item{inhibitor_fold}{An inhibitor well is flagged when it reads more than
 this many times the LPS well. Default 2.}

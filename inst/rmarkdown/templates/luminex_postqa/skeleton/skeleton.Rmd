@@ -112,6 +112,8 @@ if (length(not_indicated)) {
     paste0(paste(not_indicated[-length(not_indicated)], collapse = ", "), " and ", not_indicated[length(not_indicated)])
   cat(sprintf("<p>You did not indicate there are %s wells. Make sure that's correct.</p>\n", lst))
 }
+if ("crt_7" %in% S$switched_off)
+  cat("<p>crt_7 wells were found, but you indicated 3 cortisol doses (crt_5.5, crt_6, crt_6.5), so crt_7 was not checked. Make sure that's correct.</p>\n")
 if (length(S$never_seen))
   cat(sprintf("<p>No wells found for %s. Make sure that's correct.</p>\n", paste(S$never_seen, collapse = ", ")))
 if (!is.null(S$alt_note)) cat(sprintf("<p>%s</p>\n", esc(S$alt_note)))

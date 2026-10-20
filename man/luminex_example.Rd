@@ -9,6 +9,7 @@ luminex_example(
   n = 48,
   study = "MHS",
   il10 = FALSE,
+  cort = 4,
   repeats = FALSE,
   seed = 2026
 )
@@ -24,6 +25,10 @@ the data frame is only returned.}
 \item{il10}{Logical. Include IL-10 inhibition wells (`il10_.02`, `il10_.1`,
 `il10_.5`)? Default `FALSE`. If `TRUE`, run [luminex_qa()] with
 `il10 = TRUE` too.}
+
+\item{cort}{Number of cortisol doses: `4` (default; crt_5.5 to crt_7) or `3`
+(no crt_7 wells; the 1043 swap is then not planted). Run the QA with the
+same `cort`.}
 
 \item{repeats}{Logical. Add `_repeat` and `_interassay` rows? Default
 `FALSE` (the QA report is run before repeats).}

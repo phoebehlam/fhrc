@@ -10,6 +10,7 @@ luminex_postqa(
   hsp60 = TRUE,
   r848 = TRUE,
   il10 = FALSE,
+  cort = 4,
   na = NULL,
   ignore_us = NULL,
   use_other_us = NULL,
@@ -30,7 +31,9 @@ luminex_postqa(
 
 \item{sheet}{Sheet name (default `"final master"`).}
 
-\item{hsp60, r848, il10}{Which wells the study has (as in [luminex_qa()]).}
+\item{hsp60, r848, il10, cort}{Which wells the study has (as in [luminex_qa()]):
+`cort = 4` (default) is crt_5.5, crt_6, crt_6.5, crt_7; `cort = 3` is
+crt_5.5, crt_6, crt_6.5.}
 
 \item{na}{Wells to set to NA, as sample ids with or without the study
 prefix, e.g. `c("1139_V1_crt_7", "MHS_1066_V1_r848")`.}

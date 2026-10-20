@@ -218,3 +218,26 @@ test_that("stimulated composite follows the scoring script; tagged participants 
   # labels
   expect_true(any(fhrc:::.lpq_issue_lines(qa$problems[qa$problems$participant == "1039", ], qa$settings)$issue == "sus dose-response"))
 })
+
+test_that("cort = 3 uses crt_5.5, crt_6, crt_6.5 only; cort = 4 adds crt_7", {
+  expect_false("crt_7" %in% luminex_contrasts(cort = 3)$lower)
+  expect_true("crt_7" %in% luminex_contrasts(cort = 4)$lower)
+  expect_equal(names(sort(luminex_dose_series(cort = 3)$cortisol$doses)), c("crt_6.5", "crt_6", "crt_5.5"))
+  expect_error(luminex_contrasts(cort = 5), "must be 3")
+  d3 <- luminex_example(study = "MHS", cort = 3)
+  expect_false(any(grepl("crt_7", d3$id)))
+  # a 3-dose study: no missing crt_7, cortisol curve has 3 doses
+  q <- luminex_postqa(d3, cort = 3)
+  expect_false(any(grepl("crt_7", q$entry$problem)))
+  expect_setequal(unique(q$scored$condition[q$scored$condition %in% c("crt_5.5", "crt_6", "crt_6.5", "crt_7")]),
+                  c("crt_5.5", "crt_6", "crt_6.5"))
+  expect_true(plan_has(q$plan, "1039", "na", "crt_6.5"))      # planted dip still found
+  qq <- luminex_qa(d3, cort = 3)
+  expect_false(any(grepl("crt_7", c(qq$summary$detail, qq$low_dose$test, qq$missing$condition))))
+  # crt_7 wells present but cort = 3: set aside and noted
+  q <- luminex_postqa(d, cort = 3)
+  expect_true("crt_7" %in% q$settings$switched_off)
+  expect_false(any(q$values$condition == "crt_7"))
+  # cort = 4 but no crt_7 wells: noted as never seen
+  expect_true("crt_7" %in% luminex_postqa(d3, cort = 4)$settings$never_seen)
+})

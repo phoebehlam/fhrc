@@ -55,7 +55,9 @@
 #'
 #' @param data Path to the master `.xlsx`, or a data frame.
 #' @param sheet Sheet name (default `"final master"`).
-#' @param hsp60,r848,il10 Which wells the study has (as in [luminex_qa()]).
+#' @param hsp60,r848,il10,cort Which wells the study has (as in [luminex_qa()]):
+#'   `cort = 4` (default) is crt_5.5, crt_6, crt_6.5, crt_7; `cort = 3` is
+#'   crt_5.5, crt_6, crt_6.5.
 #' @param na Wells to set to NA, as sample ids with or without the study
 #'   prefix, e.g. `c("1139_V1_crt_7", "MHS_1066_V1_r848")`.
 #' @param ignore_us Participants whose US well is treated as 0, e.g.
@@ -88,6 +90,7 @@ luminex_postqa <- function(data,
                            hsp60 = TRUE,
                            r848 = TRUE,
                            il10 = FALSE,
+                           cort = 4,
                            na = NULL,
                            ignore_us = NULL,
                            use_other_us = NULL,
@@ -101,8 +104,9 @@ luminex_postqa <- function(data,
                            us_min = 10,
                            study = NULL,
                            visit = NULL) {
-  contrasts <- luminex_contrasts(hsp60 = hsp60, r848 = r848, il10 = il10, inhibitor_fold = inhibitor_fold)
-  dose_series <- luminex_dose_series(il10 = il10)
+  cort <- .lqa_check_cort(cort)
+  contrasts <- luminex_contrasts(hsp60 = hsp60, r848 = r848, il10 = il10, cort = cort, inhibitor_fold = inhibitor_fold)
+  dose_series <- luminex_dose_series(il10 = il10, cort = cort)
 
   source_label <- if (is.character(data)) basename(data) else "data frame"
   if (is.character(data)) {
@@ -130,6 +134,7 @@ luminex_postqa <- function(data,
   off <- character(0)
   if (!isTRUE(hsp60)) off <- c(off, "hsp60")
   if (!isTRUE(r848)) off <- c(off, "r848")
+  if (cort == 3) off <- c(off, "crt_7")
   is_off <- raw$condition %in% off | (!isTRUE(il10) & grepl("^il10", raw$condition))
   switched_off <- if (any(is_off)) sort(unique(raw$condition[is_off])) else character(0)
   raw <- raw[!is_off, , drop = FALSE]
@@ -153,7 +158,7 @@ luminex_postqa <- function(data,
   wells <- unique(c(stims, unlist(lapply(dose_series, function(s) c(s$reference, names(s$doses))))))
 
   S <- list(source = source_label, sheet = sheet, study = study, visit = visit,
-            hsp60 = hsp60, r848 = r848, il10 = il10, analytes = analytes,
+            hsp60 = hsp60, r848 = r848, il10 = il10, cort = cort, analytes = analytes,
             contrasts = contrasts, dose_series = dose_series, expected_conditions = expected_conditions,
             never_seen = never_seen, switched_off = switched_off, wells = wells, stims = stims,
             inhibitor_fold = inhibitor_fold, dip_size = dip_size, dip_cytokines = dip_cytokines,

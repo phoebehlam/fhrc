@@ -13,7 +13,9 @@ found, missing wells and data-entry errors, stimulation/inhibition order (counts
 charts), cortisol (and IL-10) dose-response, plates with a run of the same problem, and
 each tagged participant's full data.
 
-* `hsp60`, `r848`, `il10`: say whether the study has those wells.
+* `hsp60`, `r848`, `il10`: say whether the study has those wells; `cort = 4` (crt_5.5, crt_6,
+  crt_6.5, crt_7) or `cort = 3` (crt_5.5, crt_6, crt_6.5). The same settings apply to
+  `luminex_postqa_report()`.
 * `luminex_qa()` returns the same results as tables (`qa$summary`, `qa$contrasts`, ...).
 * `luminex_example()` makes a fake master file with planted problems, for training.
 * The template is also under *File > New File > R Markdown > From Template*.

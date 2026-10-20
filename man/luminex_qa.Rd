@@ -10,6 +10,7 @@ luminex_qa(
   hsp60 = TRUE,
   r848 = TRUE,
   il10 = FALSE,
+  cort = 4,
   analytes = NULL,
   contrasts = NULL,
   dose_series = NULL,
@@ -33,6 +34,9 @@ luminex_qa(
 \item{hsp60, r848}{Does the study have HSP60 / R848 wells? Default `TRUE`.}
 
 \item{il10}{Does the study have IL-10 wells? Default `FALSE`.}
+
+\item{cort}{Number of cortisol doses: `4` (default; crt_5.5, crt_6, crt_6.5,
+crt_7) or `3` (crt_5.5, crt_6, crt_6.5; any crt_7 rows are set aside).}
 
 \item{analytes}{Cytokines to check. Default: detected from the
 `*_avg_mfi` columns.}

@@ -30,6 +30,9 @@
 #' @param il10 Logical. Include IL-10 inhibition wells (`il10_.02`, `il10_.1`,
 #'   `il10_.5`)? Default `FALSE`. If `TRUE`, run [luminex_qa()] with
 #'   `il10 = TRUE` too.
+#' @param cort Number of cortisol doses: `4` (default; crt_5.5 to crt_7) or `3`
+#'   (no crt_7 wells; the 1043 swap is then not planted). Run the QA with the
+#'   same `cort`.
 #' @param repeats Logical. Add `_repeat` and `_interassay` rows? Default
 #'   `FALSE` (the QA report is run before repeats).
 #' @param seed Random seed.
@@ -39,8 +42,9 @@
 #' fake <- luminex_example(study = "OTR", il10 = TRUE)
 #' head(fake)
 #' @export
-luminex_example <- function(file = NULL, n = 48, study = "MHS", il10 = FALSE, repeats = FALSE,
+luminex_example <- function(file = NULL, n = 48, study = "MHS", il10 = FALSE, cort = 4, repeats = FALSE,
                             seed = 2026) {
+  cort <- .lqa_check_cort(cort)
   set.seed(seed)
   analytes <- c("il1b", "il6", "tnfa")
 
@@ -52,6 +56,7 @@ luminex_example <- function(file = NULL, n = 48, study = "MHS", il10 = FALSE, re
     fold <- c(fold, il10_.02 = 120 * 0.80, il10_.1 = 120 * 0.50,
               il10_.5 = 120 * 0.25)
   }
+  if (cort == 3) fold <- fold[names(fold) != "crt_7"]
   conds <- names(fold)
   base_us <- c(il1b = 25, il6 = 60, tnfa = 40)
 
@@ -87,7 +92,7 @@ luminex_example <- function(file = NULL, n = 48, study = "MHS", il10 = FALSE, re
     d
   }
   long <- swap(long, 1003, "us", "r848")
-  long <- swap(long, 1043, "crt_5.5", "crt_7")
+  if (cort == 4) long <- swap(long, 1043, "crt_5.5", "crt_7")
   for (idn in 1044:1046) long <- swap(long, idn, "us", "lps")
   sel <- long$id_num == 1039 & long$condition == "crt_6.5"
   long$mfi[sel] <- long$mfi[sel] * 0.08
