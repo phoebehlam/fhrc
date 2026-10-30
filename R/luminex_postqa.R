@@ -175,7 +175,7 @@ luminex_postqa <- function(data,
     } else if (is.character(data) && is.character(repeats_sheet)) {
       S$repeats_sheet <- repeats_sheet
       if (!repeats_sheet %in% openxlsx::getSheetNames(data)) {
-        S$alt_note <- sprintf("No '%s' sheet in this file, so other US runs were not checked.", repeats_sheet)
+        S$alt_note <- sprintf("no '%s' sheet in this file, so other us runs were not checked.", repeats_sheet)
       } else if (!identical(repeats_sheet, sheet)) {
         ar <- openxlsx::read.xlsx(data, sheet = repeats_sheet)
       }
@@ -244,7 +244,7 @@ luminex_postqa <- function(data,
 #' @export
 print.luminex_postqa <- function(x, ...) {
   s <- x$settings
-  cat("f h r c | Luminex QA after repeats -", s$study, s$visit, "\n")
+  cat("f h r c | luminex pre-scoring qa -", s$study, s$visit, "\n")
   cat("  source:      ", s$source, if (!is.na(s$sheet)) paste0("[", s$sheet, "]"), "\n")
   cat("  participants:", nrow(s$people), " data entry problems:", nrow(x$entry),
       " tagged:", length(x$tagged), "\n")
@@ -290,7 +290,7 @@ print.luminex_postqa <- function(x, ...) {
   for (k in which(plan$action == "na")) {
     i <- which(ids == plan$id[k])
     data[i, val_cols] <- NA
-    data$fix[i] <- "set to NA"
+    data$fix[i] <- "set to na"
   }
   data
 }
@@ -391,7 +391,7 @@ print.luminex_postqa <- function(x, ...) {
     if (!p %in% us_ignored) {
       cv <- .lpq_matrix(v, an, "us", "cv")[, 1]
       hi <- !is.na(cv) & !is.na(m[, "us"]) & cv > S$us_cv & m[, "us"] >= S$us_min
-      if (any(hi)) addp(p, "us_cv", "us", an[hi], extra = paste0(an[hi], " CV ", round(cv[hi]), "%", collapse = ", "))
+      if (any(hi)) addp(p, "us_cv", "us", an[hi], extra = paste0(an[hi], " cv ", round(cv[hi]), "%", collapse = ", "))
     }
     for (nm in names(S$dose_series)) {
       s <- S$dose_series[[nm]]

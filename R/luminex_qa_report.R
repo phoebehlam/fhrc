@@ -68,7 +68,7 @@ luminex_qa_report <- function(qa, output_dir = NULL, output_file = NULL,
   rmd <- file.path(work, "luminex_qa.Rmd")
   file.copy(template, rmd)
 
-  message("f h r c | rendering QA report...")
+  message("f h r c | rendering pre-repeats qa report...")
   out <- rmarkdown::render(rmd, output_file = output_file, output_dir = output_dir,
                            intermediates_dir = work, knit_root_dir = work,
                            params = list(qa = qa, max_detail = max_detail),

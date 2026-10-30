@@ -22,6 +22,9 @@ luminex_qa(
   dip_size = 1,
   dip_cytokines = 2,
   plate_run = 3,
+  highlight = NULL,
+  high = NULL,
+  high_unit = "mfi",
   study = NULL,
   visit = NULL
 )
@@ -72,6 +75,18 @@ about 2.7x of both neighbours) in at least `dip_cytokines` cytokines.}
 \item{plate_run}{A plate is listed when at least this many participants next
 to each other on it (in id order) have the same problem (default 3).}
 
+\item{highlight}{Participants to draw in green in the "by comparison" and
+dose-response charts, so the team can look at them, e.g.
+`c("1066_V1", "1139")` (an id without a visit picks every visit). Only
+changes the charts.}
+
+\item{high}{Cutoffs for a "user-input high values" section: one number for
+every cytokine (`high = 30000`), or one per cytokine
+(`high = c(il6 = 30000, tnfa = 20000)`). Wells above the cutoff are listed.}
+
+\item{high_unit}{Units of `high`: `"mfi"` (average MFI, default) or
+`"conc"` (average concentration; text such as "OOR >" counts as above).}
+
 \item{study, visit}{Labels for the report. Default: taken from the ids.}
 }
 \value{
@@ -89,7 +104,7 @@ Sample ids must look like `STUDY_IDNUM_VISIT_condition`, e.g.
 4-digit id number, `V` plus the visit number, then the condition.
 This is the pre-repeats QA: run it on the "for master" tab before any
 repeats are done. If rows ending in `_repeat`, `_repeat2`, ... or
-`_interassay` are present they are set aside and only the original run is
+`_rerun`, or `_interassay` are present they are set aside and only the original run is
 checked.
 }
 \examples{

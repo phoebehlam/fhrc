@@ -20,7 +20,8 @@ Imports:
 	rmarkdown,
 	knitr,
 	ggplot2,
-	htmltools
+	htmltools,
+	scales
 Suggests:
 	testthat (>= 3.0.0),
 	xlsx,

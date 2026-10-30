@@ -71,7 +71,7 @@ test_that("the fixed data is the whole sheet with the plan applied", {
   expect_true(all(is.na(f[f$id == "MHS_1039_V1_crt_6.5", grep("^(il1b|il6|tnfa)_", names(d))])))
   expect_true(all(f[f$id == "MHS_1003_V1_us", cyt] == 0))
   expect_equal(f$il1b_1_mfi[f$id == "MHS_1003_V1_us"], d$il1b_1_mfi[d$id == "MHS_1003_V1_us"])
-  expect_equal(f$fix[f$id == "MHS_1039_V1_crt_6.5"], "set to NA")
+  expect_equal(f$fix[f$id == "MHS_1039_V1_crt_6.5"], "set to na")
   # re-reading the fixed data gives the values the report showed after the plan
   q2 <- luminex_postqa(f[, names(d)], keep = qa$tagged)
   va <- qa$values_after[order(qa$values_after$id, qa$values_after$analyte), "value"]
@@ -161,7 +161,7 @@ test_that("from a file: the 'for master' sheet is read when present, and its abs
   openxlsx::write.xlsx(list("final master" = d), f2, rowNames = FALSE)
   expect_null(luminex_postqa(f1)$settings$alt_note)
   expect_false(is.null(luminex_postqa(f1)$alt_us))
-  expect_match(luminex_postqa(f2)$settings$alt_note, "No 'for master' sheet")
+  expect_match(luminex_postqa(f2)$settings$alt_note, "no 'for master' sheet")
 })
 
 test_that("use_other_us: the team can ask for another US run, by participant or by row", {

@@ -139,6 +139,15 @@ luminex_dose_series <- function(il10 = FALSE, cort = 4) {
 #'   (default 2).
 #' @param plate_run A plate is listed when at least this many participants next
 #'   to each other on it (in id order) have the same problem (default 3).
+#' @param highlight Participants to draw in green in the "by comparison" and
+#'   dose-response charts, so the team can look at them, e.g.
+#'   `c("1066_V1", "1139")` (an id without a visit picks every visit). Only
+#'   changes the charts.
+#' @param high Cutoffs for a "user-input high values" section: one number for
+#'   every cytokine (`high = 30000`), or one per cytokine
+#'   (`high = c(il6 = 30000, tnfa = 20000)`). Wells above the cutoff are listed.
+#' @param high_unit Units of `high`: `"mfi"` (average MFI, default) or
+#'   `"conc"` (average concentration; text such as "OOR >" counts as above).
 #' @param study,visit Labels for the report. Default: taken from the ids.
 #' @return An object of class `luminex_qa` (a list of data frames).
 #' @examples
@@ -165,6 +174,9 @@ luminex_qa <- function(data,
                        dip_size = 1,
                        dip_cytokines = 2,
                        plate_run = 3,
+                       highlight = NULL,
+                       high = NULL,
+                       high_unit = "mfi",
                        study = NULL,
                        visit = NULL) {
 
@@ -269,6 +281,10 @@ luminex_qa <- function(data,
   out$summary <- .lqa_summary(out)
   out$low_dose <- .lqa_low_dose(out)
   out$plates <- .lqa_plate_runs(out, plate_run)
+  hl <- .lqa_highlight(highlight, unique(vals$id_num))
+  out$settings$highlight <- hl$keys
+  out$settings$highlight_not_found <- hl$not_found
+  out$high <- .lqa_high(vals, high, high_unit, analytes, expected_conditions)
   class(out) <- c("luminex_qa", "list")
   out
 }
@@ -277,7 +293,7 @@ luminex_qa <- function(data,
 #' @export
 print.luminex_qa <- function(x, ...) {
   s <- x$settings
-  cat("f h r c | Luminex QA -", s$study, s$visit, "\n")
+  cat("f h r c | luminex pre-repeats qa -", s$study, s$visit, "\n")
   cat("  source:      ", s$source, if (!is.na(s$sheet)) paste0("[", s$sheet, "]"), "\n")
   cat("  participants:", x$counts$participants, " rows:", x$counts$rows,
       " plates:", x$counts$plates, " repeat/interassay rows set aside:", x$counts$extra_rows, "\n")
@@ -693,4 +709,51 @@ print.luminex_qa <- function(x, ...) {
   k <- which(tolower(trimws(names(d))) == "id")
   if (length(k) && !"id" %in% names(d)) names(d)[k[1]] <- "id"
   d
+}
+
+# participants to draw in green: "1066_V1", "MHS_1066_V1", or "1066" (every visit)
+.lqa_highlight <- function(highlight, keys) {
+  out <- list(keys = character(0), not_found = character(0))
+  if (!length(highlight)) return(out)
+  norm <- function(x) tolower(sub("^[A-Za-z]+_", "", trimws(as.character(x))))
+  k <- tolower(keys)
+  for (x in highlight) {
+    y <- norm(x)
+    hit <- keys[k == y | startsWith(k, paste0(y, "_")) | k == sub("_v[0-9]+$", "", y)]
+    if (length(hit)) out$keys <- c(out$keys, hit) else out$not_found <- c(out$not_found, as.character(x))
+  }
+  out$keys <- unique(out$keys)
+  if (length(out$not_found)) warning("highlight: not found in the data: ", paste(out$not_found, collapse = ", "), call. = FALSE)
+  out
+}
+
+# wells above user-input cutoffs (mfi or concentration), with the means per well for comparison
+.lqa_high <- function(vals, high, unit, analytes, conds) {
+  if (is.null(high) || !length(high)) return(NULL)
+  unit <- tolower(unit)
+  if (!unit %in% c("mfi", "conc")) stop("`high_unit` must be \"mfi\" or \"conc\".", call. = FALSE)
+  if (!is.numeric(high)) stop("`high` must be numbers, e.g. high = c(il6 = 30000).", call. = FALSE)
+  if (is.null(names(high)) || all(!nzchar(names(high)))) {
+    if (length(high) != 1) stop("`high`: give one number, or one per cytokine, e.g. high = c(il6 = 30000).", call. = FALSE)
+    high <- stats::setNames(rep(high, length(analytes)), analytes)
+  }
+  bad <- setdiff(names(high), analytes)
+  if (length(bad)) stop("`high`: no such cytokine in the sheet: ", paste(bad, collapse = ", "),
+                        " (the sheet has ", paste(analytes, collapse = ", "), ").", call. = FALSE)
+  cut <- data.frame(analyte = names(high), cutoff = as.numeric(high), stringsAsFactors = FALSE)
+  v <- vals[vals$analyte %in% cut$analyte & vals$condition %in% conds, , drop = FALSE]
+  v$value <- if (unit == "mfi") v$mfi else v$conc
+  txt <- trimws(as.character(v$conc_raw))
+  v$above_range <- unit == "conc" & is.na(v$value) & !is.na(txt) & grepl(">", txt)
+  v$cutoff <- cut$cutoff[match(v$analyte, cut$analyte)]
+  v$high <- (v$value > v$cutoff) %in% TRUE | v$above_range
+  mn <- function(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
+  key <- unique(v[, c("condition", "analyte")])
+  means <- data.frame(condition = key$condition, analyte = key$analyte, stringsAsFactors = FALSE)
+  means$mean_mfi <- vapply(seq_len(nrow(key)), function(i) mn(v$mfi[v$condition == key$condition[i] & v$analyte == key$analyte[i]]), 0)
+  means$mean_conc <- vapply(seq_len(nrow(key)), function(i) mn(v$conc[v$condition == key$condition[i] & v$analyte == key$analyte[i]]), 0)
+  means$mean <- if (unit == "mfi") means$mean_mfi else means$mean_conc
+  list(unit = unit, cutoffs = cut,
+       points = v[, c("id_num", "condition", "analyte", "value", "mfi", "conc", "conc_raw", "above_range", "cutoff", "high", "plate")],
+       means = means)
 }

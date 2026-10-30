@@ -1,6 +1,6 @@
 ---
-title: "`r if (!is.null(params$qa)) paste(params$qa$settings$study, params$qa$settings$visit) else 'Luminex'` cell-culture pre-repeats QA"
-date: "`r format(Sys.time(), '%d %B %Y, %H:%M')`"
+title: "`r if (!is.null(params$qa)) paste(params$qa$settings$study, params$qa$settings$visit) else 'luminex'` cell-culture pre-repeats qa"
+date: "`r tolower(format(Sys.time(), '%d %B %Y, %H:%M'))`"
 output:
   html_document:
     toc: true
@@ -27,7 +27,7 @@ library(ggplot2)
 
 qa <- params$qa
 if (is.null(qa)) {
-  if (!nzchar(params$master_file)) stop("Set `master_file` in the YAML header, or call fhrc::luminex_qa_report().")
+  if (!nzchar(params$master_file)) stop("set `master_file` in the yaml header, or call fhrc::luminex_qa_report().")
   qa <- fhrc::luminex_qa(params$master_file, sheet = params$sheet,
                          hsp60 = params$hsp60, r848 = params$r848, il10 = params$il10)
 }
@@ -38,7 +38,8 @@ sm <- qa$summary
 # ---- palette ------------------------------------------------------------------
 ink <- "#0b0b0b"; ink2 <- "#52514e"; muted <- "#898781"; grid_col <- "#e1e0d9"; surface <- "#fcfcfb"
 analyte_cols <- stats::setNames(c("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300")[seq_along(an)], an)
-flag_col <- "#d03b3b"; context_grey <- "#c3c2b7"
+flag_col <- "#d03b3b"; context_grey <- "#c3c2b7"; hl_col <- "#008300"
+hl_ids <- if (is.null(S$highlight)) character(0) else S$highlight
 
 theme_set(
   theme_minimal(base_size = 11) %+replace%
@@ -53,15 +54,15 @@ theme_set(
 
 # ---- helpers ------------------------------------------------------------------
 tbl <- function(d, ...) {
-  if (is.null(d) || !nrow(d)) return(cat("<p class='none'>None found.</p>\n"))
+  if (is.null(d) || !nrow(d)) return(cat("<p class='none'>none found.</p>\n"))
   cat(knitr::kable(d, format = "html", row.names = FALSE, escape = TRUE,
                    table.attr = "class='table table-condensed qa'", ...))
 }
-none <- function(msg = "None found.") cat("<p class='none'>", msg, "</p>\n")
+none <- function(msg = "none found.") cat("<p class='none'>", msg, "</p>\n")
 show_plot <- function(p) {
   if (is.null(p)) return(invisible())
   tryCatch(print(p), error = function(e)
-    cat("<p class='note'>Plot skipped: ", htmltools::htmlEscape(conditionMessage(e)), "</p>\n"))
+    cat("<p class='note'>plot skipped: ", htmltools::htmlEscape(conditionMessage(e)), "</p>\n"))
 }
 spread_log <- function(y, by) {           # keep flagged-id labels from overlapping
   out <- y
@@ -140,19 +141,21 @@ not_indicated <- c("hsp60", "r848", "il10")[!c(isTRUE(S$hsp60), isTRUE(S$r848), 
 if (length(not_indicated)) {
   lst <- if (length(not_indicated) == 1) not_indicated else
     paste0(paste(not_indicated[-length(not_indicated)], collapse = ", "), " and ", not_indicated[length(not_indicated)])
-  cat(sprintf("<p>You did not indicate there are %s wells. Make sure that's correct.</p>\n", lst))
+  cat(sprintf("<p>you did not indicate there are %s wells. make sure that's correct.</p>\n", lst))
 }
 if ("crt_7" %in% S$switched_off)
-  cat("<p>crt_7 wells were found, but you indicated 3 cortisol doses (crt_5.5, crt_6, crt_6.5), so crt_7 was not checked. Make sure that's correct.</p>\n")
+  cat("<p>crt_7 wells were found, but you indicated 3 cortisol doses (crt_5.5, crt_6, crt_6.5), so crt_7 was not checked. make sure that's correct.</p>\n")
 if (length(S$never_seen))
-  cat(sprintf("<p>No wells found for %s. Make sure that's correct.</p>\n", paste(S$never_seen, collapse = ", ")))
+  cat(sprintf("<p>no wells found for %s. make sure that's correct.</p>\n", paste(S$never_seen, collapse = ", ")))
+if (length(S$highlight_not_found))
+  cat(sprintf("<p>highlight: not found in the data: %s.</p>\n", htmltools::htmlEscape(paste(S$highlight_not_found, collapse = ", "))))
 ```
 
-# Summary
+# summary
 
 ```{r summary, results = "asis"}
 if (!nrow(sm)) {
-  none("None found.")
+  none("none found.")
 } else {
   cat(sprintf("<p>%d problem%s across %d participant%s.</p>\n",
               nrow(sm), if (nrow(sm) == 1) "" else "s",
@@ -164,32 +167,32 @@ if (!nrow(sm)) {
 }
 if (nrow(pr)) {
   np <- length(unique(pr$plate))
-  cat(sprintf("<p>%d plate%s with the same problem in %d or more participants in a row: see <b>Plates</b>.</p>\n",
+  cat(sprintf("<p>%d plate%s with the same problem in %d or more participants in a row: see <b>plates</b>.</p>\n",
               np, if (np == 1) "" else "s", S$plate_run))
 }
 ```
 
-## Low-dose wells
+## low-dose wells
 
 ```{r low_dose_counts, results = "asis"}
-if (!nrow(ld)) none("None found.") else {
+if (!nrow(ld)) none("none found.") else {
   iss <- unique(ld$test)
   ord <- match(iss, S$contrasts$test); ord[is.na(ord)] <- 0
   iss <- iss[order(ord)]
   tbl(data.frame(issue = iss, participants = vapply(iss, function(i) length(unique(ld$participant[ld$test == i])), 1L),
                  stringsAsFactors = FALSE))
-  cat("<p class='note'>These we can typically ignore, but they are listed under <b>Just in case</b>.</p>\n")
+  cat("<p class='note'>these we can typically ignore, but they are listed under <b>just in case</b>.</p>\n")
 }
 ```
 
-# Missing & data entry
+# missing & data entry
 
-## Missing wells and values
+## missing wells and values
 
 ```{r missing, results = "asis"}
 m <- qa$missing
 if (!nrow(m)) {
-  none("None found.")
+  none("none found.")
 } else {
   m$what <- ifelse(m$issue == "condition missing", paste0(m$condition, " missing"),
                    ifelse(m$issue == "value missing", paste0(m$condition, ": ", m$analyte, " blank"), m$issue))
@@ -199,7 +202,7 @@ if (!nrow(m)) {
 }
 ```
 
-## Rows to fix
+## rows to fix
 
 ```{r integrity, results = "asis"}
 ig <- qa$integrity
@@ -213,16 +216,16 @@ issues <- rbind(
                                       stringsAsFactors = FALSE),
   if (nrow(ig$label_mismatch)) data.frame(excel_row = ig$label_mismatch$excel_row, id = ig$label_mismatch$id,
                                           problem = "different study prefix", stringsAsFactors = FALSE))
-if (is.null(issues)) none("None found.") else tbl(issues[order(issues$excel_row), ], col.names = c("excel row", "id", "problem"))
+if (is.null(issues)) none("none found.") else tbl(issues[order(issues$excel_row), ], col.names = c("excel row", "id", "problem"))
 ```
 
-# Stimulation & inhibition order
+# stimulation & inhibition order
 
-Stimulated wells should have more cytokines than US. Similarly, `r if ("il10" %in% names(S$dose_series)) "cortisol and IL-10 wells" else "cortisol wells"` should have less than LPS alone; `r if ("il10" %in% names(S$dose_series)) "one of these wells" else "a cortisol well"` is counted only when it is more than `r paste(inhib_fold, collapse = "/")`x the LPS well. The table below counts participants not conforming to these two patterns.
+stimulated wells should have more cytokines than us. similarly, `r if ("il10" %in% names(S$dose_series)) "cortisol and il-10 wells" else "cortisol wells"` should have less than lps alone; `r if ("il10" %in% names(S$dose_series)) "one of these wells" else "a cortisol well"` is counted only when it is more than `r paste(inhib_fold, collapse = "/")`x the lps well. the table below counts participants not conforming to these two patterns.
 
 ```{r counts, results = "asis"}
 cmp <- qa$contrasts
-if (!nrow(cmp)) none("None found.") else {
+if (!nrow(cmp)) none("none found.") else {
   tests <- S$contrasts$test
   ct <- sapply(an, function(a) sapply(tests, function(t) sum(cmp$flag[cmp$test == t & cmp$analyte == a])))
   ct <- matrix(ct, nrow = length(tests), dimnames = list(tests, an))
@@ -235,7 +238,7 @@ if (!nrow(cmp)) none("None found.") else {
 }
 ```
 
-Plots below show each participant as a line, red ones are the ones that got tagged as breaking the pattern above.
+plots below show each participant as a line, red ones are the ones that got tagged as breaking the pattern above`r if (length(hl_ids)) ", and green ones are the ids you asked to look at. note green overrides red, such that a green line could have been a red one if you hadn't asked to look at it" else ""`.
 
 ```{r slope_fun}
 slope_plot <- function(d) {
@@ -246,38 +249,43 @@ slope_plot <- function(d) {
                 data.frame(id_num = d$id_num, analyte = d$analyte, well = lv[2], value = d$higher_value, flag = d$flag))
   long$well <- factor(long$well, levels = lv)
   long$grp <- paste(long$id_num, long$analyte)
-  lab <- long[long$flag & long$well == lv[2], ]
+  long$hl <- long$id_num %in% hl_ids
+  red <- long[long$flag & !long$hl, ]; grn <- long[long$hl, ]
+  lab <- rbind(red[red$well == lv[2], ], grn[grn$well == lv[2], ])
   if (nrow(lab)) lab$value <- spread_log(lab$value, lab$analyte)
   ggplot(long, aes(well, value, group = grp)) +
-    geom_line(data = long[!long$flag, ], colour = context_grey, linewidth = 0.45, alpha = 0.8) +
-    geom_line(data = long[long$flag, ], colour = flag_col, linewidth = 0.9) +
-    geom_point(data = long[long$flag, ], colour = flag_col, size = 1.8) +
-    geom_text(data = lab, aes(label = id_num), colour = flag_col, size = 3, hjust = -0.25) +
+    geom_line(data = long[!long$flag & !long$hl, ], colour = context_grey, linewidth = 0.45, alpha = 0.8) +
+    geom_line(data = red, colour = flag_col, linewidth = 0.9) +
+    geom_point(data = red, colour = flag_col, size = 1.8) +
+    geom_line(data = grn, colour = hl_col, linewidth = 0.9) +
+    geom_point(data = grn, colour = hl_col, size = 1.8) +
+    geom_text(data = lab, aes(label = id_num, colour = ifelse(hl, hl_col, flag_col)), size = 3, hjust = -0.25) +
+    scale_colour_identity() +
     scale_y_log10(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +
     scale_x_discrete(expand = expansion(add = c(0.25, 0.55))) +
     facet_wrap(~ analyte, nrow = 1) +
-    labs(x = NULL, y = paste(S$measure, "(log scale)"))
+    labs(x = NULL, y = paste(gsub("_", " ", S$measure), "(log scale)"))
 }
 ```
 
-## By comparison {.tabset .tabset-pills}
+## by comparison {.tabset .tabset-pills}
 
 ```{r slopes, results = "asis", fig.height = 3.6, fig.width = 10}
 for (tt in setdiff(S$contrasts$test, S$contrasts$test[S$contrasts$lower == "crt_7"])) {
   d <- cmp[cmp$test == tt, ]
   nf <- length(unique(d$id_num[d$flag]))
   cat("\n\n### ", tt, if (nf) paste0(" (", nf, ")"), "\n\n", sep = "")
-  if (!any(!is.na(d$diff))) cat("<p class='note'>No values to compare yet.</p>\n\n")
+  if (!any(!is.na(d$diff))) cat("<p class='note'>no values to compare yet.</p>\n\n")
   show_plot(slope_plot(d))
   cat("\n\n")
 }
 ```
 
-# Dose-response
+# dose-response
 
-Values shown as ln(MFI + 1). Dose 0 is the LPS-only well.
+values shown as ln(mfi + 1). dose 0 is the lps-only well.
 
-Only participants who are not already tagged in Stimulation & inhibition order are listed and drawn in red here. A participant is tagged when one well dips far below (or spikes far above) both of its neighbouring doses in at least `r S$dip_cytokines` cytokines.
+only participants who are not already tagged in stimulation & inhibition order are listed and drawn in red here. a participant is tagged when one well dips far below (or spikes far above) both of its neighbouring doses in at least `r S$dip_cytokines` cytokines.`r if (length(hl_ids)) " green lines are the ids you asked to look at; again, green overrides red." else ""`
 
 ```{r dose_response, results = "asis", fig.height = 3.8, fig.width = 10}
 ds <- qa$dose
@@ -286,19 +294,20 @@ dp <- qa$dose_points
 stim_issue <- !sm$issue %in% c(file_issues, dose_label)
 tagged_above <- unique(sm$participant[stim_issue])
 if (!length(S$dose_series) || !length(ds) || !nrow(ds)) {
-  none("None found.")
+  none("none found.")
 } else {
   for (nm in names(S$dose_series)) {
     cat("\n\n## ", nm, "\n\n", sep = "")
     d_nm <- di[di$series == nm & !di$id_num %in% tagged_above, ]
     ids <- unique(d_nm$id_num)
     v <- dp[dp$series == nm & !is.na(dp$score), ]
-    if (!nrow(v)) { none("None found."); next }
+    if (!nrow(v)) { none("none found."); next }
     steps <- unique(dp[dp$series == nm, c("step", "condition")])
     steps <- steps[order(steps$step), ]
-    v$hl <- v$id_num %in% ids
+    v$hl <- v$id_num %in% ids & !v$id_num %in% hl_ids
+    v$gr <- v$id_num %in% hl_ids
     v <- v[order(v$step), ]
-    last <- v[v$hl, ]
+    last <- v[v$hl | v$gr, ]
     last <- last[!duplicated(paste(last$id_num, last$analyte), fromLast = TRUE), ]
     if (nrow(last)) for (a in unique(last$analyte)) {      # nudge labels apart
       i <- which(last$analyte == a); y <- last$score[i]; gap <- 0.06 * diff(range(v$score))
@@ -308,15 +317,18 @@ if (!length(S$dose_series) || !length(ds) || !nrow(ds)) {
     }
     show_plot(
       ggplot(v, aes(step, score, group = id_num)) +
-        geom_line(data = v[!v$hl, ], colour = context_grey, linewidth = 0.45, alpha = 0.8) +
+        geom_line(data = v[!v$hl & !v$gr, ], colour = context_grey, linewidth = 0.45, alpha = 0.8) +
         geom_line(data = v[v$hl, ], colour = flag_col, linewidth = 0.9) +
         geom_point(data = v[v$hl, ], colour = flag_col, size = 1.8) +
-        geom_text(data = last, aes(label = id_num), colour = flag_col, size = 3, hjust = -0.3) +
+        geom_line(data = v[v$gr, ], colour = hl_col, linewidth = 0.9) +
+        geom_point(data = v[v$gr, ], colour = hl_col, size = 1.8) +
+        geom_text(data = last, aes(label = id_num, colour = ifelse(gr, hl_col, flag_col)), size = 3, hjust = -0.3) +
+        scale_colour_identity() +
         scale_x_continuous(breaks = steps$step, labels = paste0(steps$step, "\n", steps$condition),
                            expand = expansion(add = c(0.3, 1.1))) +
         facet_wrap(~ analyte, nrow = 1) +
-        labs(x = "dose", y = "ln(MFI + 1)"))
-    if (!length(ids)) { none("None found."); next }
+        labs(x = "dose", y = "ln(mfi + 1)"))
+    if (!length(ids)) { none("none found."); next }
     d_nm <- d_nm[order(idnum(d_nm$id_num), d_nm$id_num), ]
     tbl(d_nm[, c("id_num", "text")], col.names = c("id", "dose-response issue"))
     cat("\n\n")
@@ -324,13 +336,13 @@ if (!length(S$dose_series) || !length(ds) || !nrow(ds)) {
 }
 ```
 
-# Plates
+# plates
 
 ```{r plates, results = "asis"}
 if (!nrow(pr)) {
-  none("None found.")
+  none("none found.")
 } else {
-  cat(sprintf("<p class='note'>Listed when %d or more participants next to each other on the same plate (in id order) have the same problem.</p>\n",
+  cat(sprintf("<p class='note'>listed when %d or more participants next to each other on the same plate (in id order) have the same problem.</p>\n",
               S$plate_run))
   for (p in unique(pr$plate)) {
     r <- pr[pr$plate == p, ]
@@ -338,17 +350,17 @@ if (!nrow(pr)) {
       k <- r$participants == ps
       sprintf("%d participants in a row (%s) have %s", r$n[k][1], ps, paste(r$issue[k], collapse = ", "))
     }, "")
-    cat(sprintf("<p><b>%s</b>: %s. Please investigate.</p>\n", htmltools::htmlEscape(short_plate(p)),
+    cat(sprintf("<p><b>%s</b>: %s. please investigate.</p>\n", htmltools::htmlEscape(short_plate(p)),
                 htmltools::htmlEscape(paste(parts, collapse = "; "))))
   }
 }
 ```
 
-# Tagged participants
+# tagged participants
 
 ```{r detail_intro, results = "asis"}
 ids_show <- utils::head(tagged_ids, params$max_detail)
-if (!length(tagged_ids)) none("None found.")
+if (!length(tagged_ids)) none("none found.")
 ```
 
 ```{r detail, results = "asis", fig.height = 3.6, fig.width = 10}
@@ -356,7 +368,7 @@ panel <- function(p, issues, details) {
   v <- qa$values[qa$values$id_num == p, ]
   cat("\n\n## ", p, " {.participant}\n\n", sep = "")
   if (nrow(v) && !is.na(v$plate[1]) && nzchar(trimws(v$plate[1])))
-    cat(sprintf("<p class='note'>Plate: %s</p>\n", htmltools::htmlEscape(short_plate(v$plate[1]))))
+    cat(sprintf("<p class='note'>plate: %s</p>\n", htmltools::htmlEscape(short_plate(v$plate[1]))))
   cat("<ul>", paste0("<li><b>", htmltools::htmlEscape(issues), ":</b> ",
                      htmltools::htmlEscape(details), "</li>", collapse = ""), "</ul>\n", sep = "")
   if (!nrow(v)) return(invisible())
@@ -372,7 +384,7 @@ panel <- function(p, issues, details) {
     show_plot(
       ggplot(pv, aes(x, mfi, colour = analyte)) +
         geom_hline(data = us, aes(yintercept = mfi, colour = analyte), linetype = "dashed", linewidth = 0.6) +
-        geom_text(data = us, aes(x = x, y = mfi, label = "US"), colour = ink2, size = 3, vjust = -0.4) +
+        geom_text(data = us, aes(x = x, y = mfi, label = "us"), colour = ink2, size = 3, vjust = -0.4) +
         geom_line(data = pv[!is.na(pv$line) & !is.na(pv$mfi), ], aes(group = interaction(analyte, line)), linewidth = 0.9) +
         geom_point(data = pv[!is.na(pv$mfi), ], size = 2.4, shape = 21, fill = surface, stroke = 0.7) +
         scale_colour_manual(values = analyte_cols, guide = "none") +
@@ -382,24 +394,24 @@ panel <- function(p, issues, details) {
                            expand = expansion(mult = c(0.03, 0.12))) +
         expand_limits(y = 0) +
         facet_wrap(~ analyte, nrow = 1, scales = "free_y") +
-        labs(x = NULL, y = "MFI") +
+        labs(x = NULL, y = "mfi") +
         theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)))
-  } else cat("<p class='note'>No values for this participant.</p>\n")
+  } else cat("<p class='note'>no values for this participant.</p>\n")
   conds <- unique(v$condition)
   conds <- conds[order(match(conds, lv))]
   get <- function(a, what) {
     r <- v[v$analyte == a, ]
     r[match(conds, r$condition), what]
   }
-  conc_txt <- function(a) {               # numbers as numbers; keep text such as "OOR >" as is
+  conc_txt <- function(a) {               # numbers as numbers; keep text such as "oor >" as is
     raw <- trimws(as.character(get(a, "conc_raw")))
     num <- suppressWarnings(as.numeric(raw))
     ifelse(is.na(raw) | raw == "", "", ifelse(is.na(num), raw, fmt(num, 2)))
   }
   w <- data.frame(condition = conds, stringsAsFactors = FALSE)
-  for (a in an) w[[paste(a, "MFI")]] <- fmt(get(a, "mfi"), 0)
+  for (a in an) w[[paste(a, "mfi")]] <- fmt(get(a, "mfi"), 0)
   for (a in an) w[[paste(a, "conc")]] <- conc_txt(a)
-  for (a in an) w[[paste(a, "CV%")]] <- fmt(get(a, "cv"), 1)
+  for (a in an) w[[paste(a, "cv%")]] <- fmt(get(a, "cv"), 1)
   tbl(w)
 }
 for (p in ids_show) {
@@ -408,18 +420,82 @@ for (p in ids_show) {
 }
 ```
 
-# Just in case
+# just in case
 
 ```{r jic, results = "asis", fig.height = 3.6, fig.width = 10}
 if (!nrow(ld)) {
-  none("None found.")
+  none("none found.")
 } else {
   if (length(jic_also_tagged))
-    cat(sprintf("<p class='note'>Also with low-dose reversals (shown under Tagged participants): %s.</p>\n",
+    cat(sprintf("<p class='note'>also with low-dose reversals (shown under tagged participants): %s.</p>\n",
                 paste(jic_also_tagged, collapse = ", ")))
   for (p in utils::head(jic_ids, params$max_detail)) {
     items <- ld[ld$participant == p, ]
     panel(p, items$test, items$cytokines)
+  }
+}
+```
+
+```{r high, results = "asis", fig.width = 10, fig.height = 2.9 * max(1, if (is.null(qa$high)) 1 else nrow(qa$high$cutoffs))}
+H <- qa$high
+if (!is.null(H)) {
+  cat("\n\n# user-input high values\n\n")
+  unit_lab <- if (H$unit == "mfi") "average mfi" else "average concentration"
+  cat(sprintf("<p class='note'>cutoffs (%s): %s. a well is listed when it is above its cytokine's cutoff%s. in the chart, each dot is one participant's well; red dots are above the cutoff (labelled with the id), the dashed line is the cutoff.</p>\n",
+              unit_lab, htmltools::htmlEscape(paste0(H$cutoffs$analyte, " ", fmt(H$cutoffs$cutoff, 0), collapse = ", ")),
+              if (H$unit == "conc") " (text such as \"oor >\" counts as above, and is drawn just above the cutoff)" else ""))
+  pt <- H$points
+  pt$y <- ifelse(pt$above_range & is.na(pt$value), pt$cutoff * 1.15, pt$value)
+  pt <- pt[!is.na(pt$y), ]
+  lv <- c(intersect(cond_order, pt$condition), setdiff(unique(pt$condition), cond_order))
+  pt$condition <- factor(pt$condition, levels = lv)
+  hi <- pt[pt$high, ]
+  if (nrow(pt)) {
+    set.seed(1)
+    pt$xj <- as.numeric(pt$condition) + stats::runif(nrow(pt), -0.18, 0.18)
+    hi <- pt[pt$high, ]
+    show_plot(
+      ggplot(pt, aes(xj, y)) +
+        geom_point(data = pt[!pt$high, ], colour = context_grey, size = 1.4, alpha = 0.8) +
+        geom_hline(data = H$cutoffs, aes(yintercept = cutoff), linetype = "dashed", colour = ink2, linewidth = 0.5) +
+        geom_point(data = hi, colour = flag_col, size = 2) +
+        geom_text(data = hi, aes(label = id_num), colour = flag_col, size = 2.8, hjust = -0.25, check_overlap = TRUE) +
+        scale_x_continuous(breaks = seq_along(lv), labels = lv) +
+        scale_y_continuous(trans = scales::pseudo_log_trans(sigma = 1, base = 10), breaks = c(0, 10^(1:7)),
+                           labels = function(x) format(x, big.mark = ",", scientific = FALSE, trim = TRUE)) +
+        facet_wrap(~ analyte, ncol = 1, scales = "free_y") +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+        labs(x = NULL, y = paste(unit_lab, "(log scale)")))
+  }
+  cat("\n\n## wells above the cutoff\n\n")
+  conc_txt <- function(raw) {               # numbers as numbers; keep text such as "oor >" as is
+    raw <- trimws(as.character(raw)); num <- suppressWarnings(as.numeric(raw))
+    ifelse(is.na(raw) | raw == "", "", ifelse(is.na(num), raw, fmt(num, 2)))
+  }
+  if (!any(H$points$high)) none() else {
+    h <- H$points[H$points$high, ]
+    h <- h[order(idnum(h$id_num), h$id_num, match(h$condition, lv), h$analyte), ]
+    k <- match(paste(h$condition, h$analyte), paste(H$means$condition, H$means$analyte))
+    is_mfi <- H$unit == "mfi"
+    cat(sprintf("<p class='note'>the cutoff is only given in the unit you chose (%s).</p>\n", if (is_mfi) "mfi" else "concentration"))
+    tbl(data.frame(id = h$id_num, well = h$condition, cytokine = h$analyte,
+                   `value (mfi)` = fmt(h$mfi, 0), `cutoff (mfi)` = if (is_mfi) fmt(h$cutoff, 0) else "",
+                   `well mean (mfi)` = fmt(H$means$mean_mfi[k], 0),
+                   `value (conc)` = conc_txt(h$conc_raw), `cutoff (conc)` = if (is_mfi) "" else fmt(h$cutoff, 2),
+                   `well mean (conc)` = fmt(H$means$mean_conc[k], 2),
+                   check.names = FALSE, stringsAsFactors = FALSE))
+  }
+  cat("\n\n## means per well\n\n")
+  mm <- H$means
+  if (!nrow(mm)) none() else {
+    w <- data.frame(well = intersect(lv, unique(mm$condition)), stringsAsFactors = FALSE)
+    for (a in H$cutoffs$analyte) {
+      k <- match(paste(w$well, a), paste(mm$condition, mm$analyte))
+      w[[paste(a, "mfi")]] <- fmt(mm$mean_mfi[k], 0)
+      w[[paste(a, "conc")]] <- fmt(mm$mean_conc[k], 2)
+    }
+    cat("<p class='note'>mean of all participants, per well and cytokine, in mfi and concentration.</p>\n")
+    tbl(w)
   }
 }
 ```

@@ -82,7 +82,7 @@ luminex_postqa_report <- function(qa, export = FALSE, output_dir = NULL, output_
   rmd <- file.path(work, "luminex_postqa.Rmd")
   file.copy(template, rmd)
 
-  message("f h r c | rendering pre-scoring QA report...")
+  message("f h r c | rendering pre-scoring qa report...")
   out <- rmarkdown::render(rmd, output_file = output_file, output_dir = output_dir,
                            intermediates_dir = work, knit_root_dir = work,
                            params = list(qa = qa), envir = new.env(parent = globalenv()), quiet = TRUE)

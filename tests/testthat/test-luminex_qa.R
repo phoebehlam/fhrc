@@ -240,3 +240,43 @@ test_that("cortisol wells rising with dose (but under 2x LPS) are not tagged", {
   expect_false(any(q$summary$participant == "1010"))
   expect_true(any(q$low_dose$participant == "1010") == FALSE)
 })
+
+test_that("highlight: ids are matched with or without study prefix and visit; unknown ids warn", {
+  d2 <- rbind(luminex_example(n = 12), transform(luminex_example(n = 12), id = sub("_V1_", "_V2_", id)))
+  expect_warning(q <- luminex_qa(d2, highlight = c("1003", "MHS_1005_V2", "9999")), "9999")
+  expect_setequal(q$settings$highlight, c("1003_V1", "1003_V2", "1005_V2"))
+  expect_equal(q$settings$highlight_not_found, "9999")
+  q1 <- luminex_qa(luminex_example(n = 12), highlight = "1003_V1")   # one visit: the visit is dropped
+  expect_equal(q1$settings$highlight, "1003")
+  expect_equal(nrow(q1$summary), nrow(luminex_qa(luminex_example(n = 12))$summary))   # charts only
+})
+
+test_that("high: user cutoffs in mfi or concentration flag the wells above them", {
+  q <- luminex_qa(luminex_example(), high = c(il6 = 20000, tnfa = 9000))
+  h <- q$high
+  expect_equal(h$unit, "mfi")
+  hi <- h$points[h$points$high, ]
+  expect_true(all(hi$value > hi$cutoff))
+  expect_true(any(hi$id_num == "1031" & hi$condition == "lps" & hi$analyte == "il6"))   # planted 31000
+  v <- q$values[q$values$analyte == "tnfa" & q$values$condition %in% q$settings$expected_conditions, ]
+  expect_equal(sum(h$points$high & h$points$analyte == "tnfa"), sum(v$mfi > 9000, na.rm = TRUE))
+  m <- h$means[h$means$condition == "lps" & h$means$analyte == "il6", "mean"]
+  expect_equal(m, mean(q$values$mfi[q$values$condition == "lps" & q$values$analyte == "il6"], na.rm = TRUE))
+  # one number for every cytokine; concentration with "OOR >" counted as above
+  q2 <- luminex_qa(luminex_example(), high = 600, high_unit = "conc")
+  expect_setequal(q2$high$cutoffs$analyte, c("il1b", "il6", "tnfa"))
+  oor <- q2$high$points[grepl(">", q2$high$points$conc_raw), ]
+  expect_true(nrow(oor) > 0 && all(oor$high))
+  expect_error(luminex_qa(luminex_example(), high = c(il99 = 5)), "no such cytokine")
+  expect_error(luminex_qa(luminex_example(), high = 5, high_unit = "pg"), "high_unit")
+  expect_null(luminex_qa(luminex_example())$high)
+})
+
+test_that("pre-repeats report renders with highlight and high values", {
+  skip_if_not(rmarkdown::pandoc_available())
+  q <- luminex_qa(luminex_example(), highlight = c("1010", "1023"), high = c(il6 = 20000))
+  out <- luminex_qa_report(q, output_dir = tempdir(), open = FALSE)
+  html <- paste(readLines(out, warn = FALSE), collapse = "\n")
+  expect_match(html, "user-input high values")
+  expect_match(html, "green\\s+overrides\\s+red")
+})
