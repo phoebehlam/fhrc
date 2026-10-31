@@ -268,7 +268,7 @@ test_that("high: user cutoffs in mfi or concentration flag the wells above them"
   oor <- q2$high$points[grepl(">", q2$high$points$conc_raw), ]
   expect_true(nrow(oor) > 0 && all(oor$high))
   expect_error(luminex_qa(luminex_example(), high = c(il99 = 5)), "no such cytokine")
-  expect_error(luminex_qa(luminex_example(), high = 5, high_unit = "pg"), "high_unit")
+  expect_error(luminex_qa(luminex_example(), high = 5, high_unit = "pg"), "userinput_high_unit")
   expect_null(luminex_qa(luminex_example())$high)
 })
 
@@ -279,4 +279,14 @@ test_that("pre-repeats report renders with highlight and high values", {
   html <- paste(readLines(out, warn = FALSE), collapse = "\n")
   expect_match(html, "user-input high values")
   expect_match(html, "green\\s+overrides\\s+red")
+})
+
+test_that("userinput_* argument names work (and match the old names)", {
+  d <- luminex_example()
+  a <- luminex_qa(d, userinput_ids = c("1010", "1023"), userinput_high_cutoff = 30000, userinput_high_unit = "mfi")
+  b <- luminex_qa(d, highlight = c("1010", "1023"), high = 30000, high_unit = "mfi")
+  expect_equal(a$settings$highlight, c("1010", "1023"))
+  expect_equal(a$high$points, b$high$points)
+  expect_equal(luminex_qa(d, userinput_high_cutoff = 600, userinput_high_unit = "conc")$high$unit, "conc")
+  expect_error(luminex_qa(d, userinput_high_cutoff = c(il99 = 5)), "userinput_high_cutoff")
 })

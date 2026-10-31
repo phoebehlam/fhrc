@@ -148,7 +148,7 @@ if ("crt_7" %in% S$switched_off)
 if (length(S$never_seen))
   cat(sprintf("<p>no wells found for %s. make sure that's correct.</p>\n", paste(S$never_seen, collapse = ", ")))
 if (length(S$highlight_not_found))
-  cat(sprintf("<p>highlight: not found in the data: %s.</p>\n", htmltools::htmlEscape(paste(S$highlight_not_found, collapse = ", "))))
+  cat(sprintf("<p>userinput_ids: not found in the data: %s.</p>\n", htmltools::htmlEscape(paste(S$highlight_not_found, collapse = ", "))))
 ```
 
 # summary

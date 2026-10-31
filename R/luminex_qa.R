@@ -139,15 +139,18 @@ luminex_dose_series <- function(il10 = FALSE, cort = 4) {
 #'   (default 2).
 #' @param plate_run A plate is listed when at least this many participants next
 #'   to each other on it (in id order) have the same problem (default 3).
-#' @param highlight Participants to draw in green in the "by comparison" and
-#'   dose-response charts, so the team can look at them, e.g.
+#' @param userinput_ids Participants to draw in green in the "by comparison"
+#'   and dose-response charts, so the team can look at them, e.g.
 #'   `c("1066_V1", "1139")` (an id without a visit picks every visit). Only
 #'   changes the charts.
-#' @param high Cutoffs for a "user-input high values" section: one number for
-#'   every cytokine (`high = 30000`), or one per cytokine
-#'   (`high = c(il6 = 30000, tnfa = 20000)`). Wells above the cutoff are listed.
-#' @param high_unit Units of `high`: `"mfi"` (average MFI, default) or
-#'   `"conc"` (average concentration; text such as "OOR >" counts as above).
+#' @param userinput_high_cutoff Cutoffs for a "user-input high values" section:
+#'   one number for every cytokine (`30000`), or one per cytokine
+#'   (`c(il6 = 30000, tnfa = 20000)`). Wells above the cutoff are listed.
+#' @param userinput_high_unit Units of the cutoffs: `"mfi"` (average MFI,
+#'   default) or `"conc"` (average concentration; text such as "OOR >" counts
+#'   as above).
+#' @param highlight,high,high_unit Older names for the three arguments above;
+#'   still accepted.
 #' @param study,visit Labels for the report. Default: taken from the ids.
 #' @return An object of class `luminex_qa` (a list of data frames).
 #' @examples
@@ -174,9 +177,12 @@ luminex_qa <- function(data,
                        dip_size = 1,
                        dip_cytokines = 2,
                        plate_run = 3,
+                       userinput_ids = NULL,
+                       userinput_high_cutoff = NULL,
+                       userinput_high_unit = "mfi",
                        highlight = NULL,
                        high = NULL,
-                       high_unit = "mfi",
+                       high_unit = NULL,
                        study = NULL,
                        visit = NULL) {
 
@@ -281,10 +287,13 @@ luminex_qa <- function(data,
   out$summary <- .lqa_summary(out)
   out$low_dose <- .lqa_low_dose(out)
   out$plates <- .lqa_plate_runs(out, plate_run)
-  hl <- .lqa_highlight(highlight, unique(vals$id_num))
+  if (is.null(userinput_ids)) userinput_ids <- highlight
+  if (is.null(userinput_high_cutoff)) userinput_high_cutoff <- high
+  if (!is.null(high_unit)) userinput_high_unit <- high_unit
+  hl <- .lqa_highlight(userinput_ids, unique(vals$id_num))
   out$settings$highlight <- hl$keys
   out$settings$highlight_not_found <- hl$not_found
-  out$high <- .lqa_high(vals, high, high_unit, analytes, expected_conditions)
+  out$high <- .lqa_high(vals, userinput_high_cutoff, userinput_high_unit, analytes, expected_conditions)
   class(out) <- c("luminex_qa", "list")
   out
 }
@@ -723,7 +732,7 @@ print.luminex_qa <- function(x, ...) {
     if (length(hit)) out$keys <- c(out$keys, hit) else out$not_found <- c(out$not_found, as.character(x))
   }
   out$keys <- unique(out$keys)
-  if (length(out$not_found)) warning("highlight: not found in the data: ", paste(out$not_found, collapse = ", "), call. = FALSE)
+  if (length(out$not_found)) warning("userinput_ids: not found in the data: ", paste(out$not_found, collapse = ", "), call. = FALSE)
   out
 }
 
@@ -731,14 +740,14 @@ print.luminex_qa <- function(x, ...) {
 .lqa_high <- function(vals, high, unit, analytes, conds) {
   if (is.null(high) || !length(high)) return(NULL)
   unit <- tolower(unit)
-  if (!unit %in% c("mfi", "conc")) stop("`high_unit` must be \"mfi\" or \"conc\".", call. = FALSE)
-  if (!is.numeric(high)) stop("`high` must be numbers, e.g. high = c(il6 = 30000).", call. = FALSE)
+  if (!unit %in% c("mfi", "conc")) stop("`userinput_high_unit` must be \"mfi\" or \"conc\".", call. = FALSE)
+  if (!is.numeric(high)) stop("`userinput_high_cutoff` must be numbers, e.g. c(il6 = 30000).", call. = FALSE)
   if (is.null(names(high)) || all(!nzchar(names(high)))) {
-    if (length(high) != 1) stop("`high`: give one number, or one per cytokine, e.g. high = c(il6 = 30000).", call. = FALSE)
+    if (length(high) != 1) stop("`userinput_high_cutoff`: give one number, or one per cytokine, e.g. c(il6 = 30000).", call. = FALSE)
     high <- stats::setNames(rep(high, length(analytes)), analytes)
   }
   bad <- setdiff(names(high), analytes)
-  if (length(bad)) stop("`high`: no such cytokine in the sheet: ", paste(bad, collapse = ", "),
+  if (length(bad)) stop("`userinput_high_cutoff`: no such cytokine in the sheet: ", paste(bad, collapse = ", "),
                         " (the sheet has ", paste(analytes, collapse = ", "), ").", call. = FALSE)
   cut <- data.frame(analyte = names(high), cutoff = as.numeric(high), stringsAsFactors = FALSE)
   v <- vals[vals$analyte %in% cut$analyte & vals$condition %in% conds, , drop = FALSE]

@@ -22,9 +22,12 @@ luminex_qa(
   dip_size = 1,
   dip_cytokines = 2,
   plate_run = 3,
+  userinput_ids = NULL,
+  userinput_high_cutoff = NULL,
+  userinput_high_unit = "mfi",
   highlight = NULL,
   high = NULL,
-  high_unit = "mfi",
+  high_unit = NULL,
   study = NULL,
   visit = NULL
 )
@@ -75,17 +78,21 @@ about 2.7x of both neighbours) in at least `dip_cytokines` cytokines.}
 \item{plate_run}{A plate is listed when at least this many participants next
 to each other on it (in id order) have the same problem (default 3).}
 
-\item{highlight}{Participants to draw in green in the "by comparison" and
-dose-response charts, so the team can look at them, e.g.
+\item{userinput_ids}{Participants to draw in green in the "by comparison"
+and dose-response charts, so the team can look at them, e.g.
 `c("1066_V1", "1139")` (an id without a visit picks every visit). Only
 changes the charts.}
 
-\item{high}{Cutoffs for a "user-input high values" section: one number for
-every cytokine (`high = 30000`), or one per cytokine
-(`high = c(il6 = 30000, tnfa = 20000)`). Wells above the cutoff are listed.}
+\item{userinput_high_cutoff}{Cutoffs for a "user-input high values" section:
+one number for every cytokine (`30000`), or one per cytokine
+(`c(il6 = 30000, tnfa = 20000)`). Wells above the cutoff are listed.}
 
-\item{high_unit}{Units of `high`: `"mfi"` (average MFI, default) or
-`"conc"` (average concentration; text such as "OOR >" counts as above).}
+\item{userinput_high_unit}{Units of the cutoffs: `"mfi"` (average MFI,
+default) or `"conc"` (average concentration; text such as "OOR >" counts
+as above).}
+
+\item{highlight, high, high_unit}{Older names for the three arguments above;
+still accepted.}
 
 \item{study, visit}{Labels for the report. Default: taken from the ids.}
 }
