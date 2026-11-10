@@ -231,7 +231,7 @@ values_table <- function(v, p, keep = NULL) {
   w <- data.frame(condition = conds, stringsAsFactors = FALSE)
   for (a in an) w[[paste(a, "mfi")]] <- fmt(get(a, "mfi"), 0)
   for (a in an) w[[paste(a, "conc")]] <- conc_txt(get(a, "conc_raw"))
-  for (a in an) w[[paste(a, "cv%")]] <- fmt(get(a, "cv"), 1)
+  if (!isTRUE(S$no_cv)) for (a in an) w[[paste(a, "cv%")]] <- fmt(get(a, "cv"), 1)
   from <- plan$from_row[plan$participant == p & plan$action == "use other us"]
   if (length(from) && !is.null(qa$alt_us)) {                # the other US run, as an extra row
     o <- qa$alt_us[qa$alt_us$excel_row == from[1], ]
@@ -240,7 +240,7 @@ values_table <- function(v, p, keep = NULL) {
                      stringsAsFactors = FALSE)
     for (a in an) ow[[paste(a, "mfi")]] <- fmt(og(a, "mfi"), 0)
     for (a in an) ow[[paste(a, "conc")]] <- conc_txt(og(a, "conc_raw"))
-    for (a in an) ow[[paste(a, "cv%")]] <- fmt(og(a, "cv"), 1)
+    if (!isTRUE(S$no_cv)) for (a in an) ow[[paste(a, "cv%")]] <- fmt(og(a, "cv"), 1)
     w <- rbind(w, ow)
   }
   tbl(w)
@@ -303,7 +303,8 @@ k <- min(S$dip_cytokines, length(an))
 fold_lab <- paste0(S$inhibitor_fold, "x")
 rules <- c(
   sprintf("<b>sus 0</b>: a well comes out as 0 after scoring in at least %d cytokines, either because it is about 0 as measured (%s MFI or less) or because it is below US.", k, S$zero_mfi),
-  sprintf("<b>non-zero us large cv</b>: the US replicates' CV is above %s%% in a cytokine where US is at least %s MFI (low US values often have large CVs and are not counted).", S$us_cv, S$us_min),
+  if (isTRUE(S$no_cv)) "<b>non-zero us large cv</b>: not checked, because no_cv is on." else
+    sprintf("<b>non-zero us large cv</b>: the US replicates' CV is above %s%% in a cytokine where US is at least %s MFI (low US values often have large CVs and are not counted).", S$us_cv, S$us_min),
   sprintf("<b>sus dose-response</b>: one dose well is more than %s below (dip) or above (spike) both neighbouring doses on the ln scale, in at least %d cytokines.", S$dip_size, k),
   "<b>line slope</b>: the slope scores before and after plan are just lm, not the extracted slopes from mlm models.",
   sprintf("<b>crt &gt; %s lps</b> (and il10): an inhibitor well reads more than %s the LPS well in at least %d cytokines.", fold_lab, fold_lab, k),

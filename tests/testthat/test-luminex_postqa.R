@@ -262,3 +262,33 @@ test_that("a study without hsp60 and r848, an 'ID' column, and '_rerun' rows all
   expect_true(file.exists(luminex_postqa_report(q, output_dir = dir, open = FALSE)[["report"]]))
   expect_true(file.exists(luminex_qa_report(qq, output_dir = dir, open = FALSE)))
 })
+
+test_that("no_cv: sheets without CV columns work, and the us cv rule is switched off", {
+  d0 <- luminex_example(study = "MHS")
+  nocv <- d0[, !grepl("_mfi_cv$", names(d0))]
+  q <- luminex_postqa(nocv, no_cv = TRUE)
+  expect_true(q$settings$no_cv)
+  expect_true(all(is.na(q$values$cv)))
+  expect_false(any(q$problems$type == "us_cv"))
+  # with CV columns present, no_cv = TRUE ignores them: a large us cv is not tagged
+  d2 <- d0; d2$il6_mfi_cv[d2$id == "MHS_1010_V1_us"] <- 90
+  expect_true(any(luminex_postqa(d2)$problems$type == "us_cv"))
+  expect_false(any(luminex_postqa(d2, no_cv = TRUE)$problems$type == "us_cv"))
+  expect_true(luminex_qa(nocv, no_cv = TRUE)$settings$no_cv)
+  skip_if_not(rmarkdown::pandoc_available())
+  dir <- tempfile("nocv"); dir.create(dir)
+  h1 <- paste(readLines(luminex_postqa_report(q, output_dir = dir, open = FALSE)[["report"]], warn = FALSE), collapse = "\n")
+  expect_false(grepl("cv%", h1, fixed = TRUE))
+  expect_match(h1, "not checked, because no_cv is on")
+  h2 <- paste(readLines(luminex_qa_report(luminex_qa(nocv, no_cv = TRUE), output_dir = dir, open = FALSE), warn = FALSE), collapse = "\n")
+  expect_false(grepl("cv%", h2, fixed = TRUE))
+})
+
+test_that("ids with 5 and 6 digits are read", {
+  d5 <- luminex_example(study = "MHS", n = 8)
+  d5$id <- sub("^MHS_(1[0-9]{3})_", "MHS_\\100_", d5$id)            # 1000 -> 100000
+  q <- luminex_qa(d5)
+  expect_equal(nrow(q$integrity$unparsed), 0)
+  expect_true(all(nchar(unique(q$values$id_num)) == 6))
+  expect_s3_class(luminex_postqa(d5), "luminex_postqa")
+})

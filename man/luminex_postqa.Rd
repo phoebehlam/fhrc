@@ -11,6 +11,7 @@ luminex_postqa(
   r848 = TRUE,
   il10 = FALSE,
   cort = 4,
+  no_cv = FALSE,
   na = NULL,
   ignore_us = NULL,
   use_other_us = NULL,
@@ -34,6 +35,10 @@ luminex_postqa(
 \item{hsp60, r848, il10, cort}{Which wells the study has (as in [luminex_qa()]):
 `cort = 4` (default) is crt_5.5, crt_6, crt_6.5, crt_7; `cort = 3` is
 crt_5.5, crt_6, crt_6.5.}
+
+\item{no_cv}{Set `TRUE` when the sheet has no CV columns (or they should
+not be used): the "non-zero us large cv" rule is skipped and the cv\%
+columns are left out of the report.}
 
 \item{na}{Wells to set to NA, as sample ids with or without the study
 prefix, e.g. `c("1139_V1_crt_7", "MHS_1066_V1_r848")`.}

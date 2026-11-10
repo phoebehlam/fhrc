@@ -7,10 +7,10 @@ has <- function(id, issue, pattern = ".") {
   any(sm$participant == id & sm$issue == issue & grepl(pattern, sm$detail, fixed = !identical(pattern, ".")))
 }
 
-test_that("ids are parsed: any study letters, 3-4 digit ids, repeat / interassay suffixes", {
+test_that("ids are parsed: any study letters, 3-6 digit ids, repeat / interassay suffixes", {
   p <- fhrc:::.lqa_parse_ids(c("MHS_1000_V1_crt_5.5", "OTR_101_V3_hsp60_interassay",
                                "OTR_1371_V3_us_repeat2", "OTR_1001_V1_il10_.02",
-                               "OTR_10011_V1_lps", "OTR_1001_1_lps", "garbage"))
+                               "OTR_1000111_V1_lps", "OTR_1001_1_lps", "garbage"))
   expect_equal(p$study[1:4], c("MHS", "OTR", "OTR", "OTR"))
   expect_equal(p$id_num[1:4], c("1000", "101", "1371", "1001"))
   expect_equal(p$condition, c("crt_5.5", "hsp60", "us", "il10_.02", NA, NA, NA))

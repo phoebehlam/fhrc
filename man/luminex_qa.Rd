@@ -25,6 +25,7 @@ luminex_qa(
   userinput_ids = NULL,
   userinput_high_cutoff = NULL,
   userinput_high_unit = "mfi",
+  no_cv = FALSE,
   highlight = NULL,
   high = NULL,
   high_unit = NULL,
@@ -90,6 +91,9 @@ one number for every cytokine (`30000`), or one per cytokine
 \item{userinput_high_unit}{Units of the cutoffs: `"mfi"` (average MFI,
 default) or `"conc"` (average concentration; text such as "OOR >" counts
 as above).}
+
+\item{no_cv}{Set `TRUE` when the sheet has no CV columns (or they should
+not be used): the cv% columns are left out of the report.}
 
 \item{highlight, high, high_unit}{Older names for the three arguments above;
 still accepted.}

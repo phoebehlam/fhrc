@@ -73,6 +73,9 @@
 #' @param inhibitor_fold,dip_size,dip_cytokines As in [luminex_qa()].
 #' @param zero_mfi A well at or below this MFI (after negatives are set to 0)
 #'   counts as about 0 (default 5).
+#' @param no_cv Set `TRUE` when the sheet has no CV columns (or they should
+#'   not be used): the "non-zero us large cv" rule is skipped and the cv\%
+#'   columns are left out of the report.
 #' @param us_cv,us_min US replicate CV (\%) above which, with US at least
 #'   `us_min` MFI, US replicates count as disagreeing (defaults 30 and 10).
 #' @param study,visit Labels for the report. Default: taken from the ids.
@@ -91,6 +94,7 @@ luminex_postqa <- function(data,
                            r848 = TRUE,
                            il10 = FALSE,
                            cort = 4,
+                           no_cv = FALSE,
                            na = NULL,
                            ignore_us = NULL,
                            use_other_us = NULL,
@@ -163,7 +167,7 @@ luminex_postqa <- function(data,
             contrasts = contrasts, dose_series = dose_series, expected_conditions = expected_conditions,
             never_seen = never_seen, switched_off = switched_off, wells = wells, stims = stims,
             inhibitor_fold = inhibitor_fold, dip_size = dip_size, dip_cytokines = dip_cytokines,
-            zero_mfi = zero_mfi, us_cv = us_cv, us_min = us_min, run_at = Sys.time())
+            zero_mfi = zero_mfi, us_cv = us_cv, us_min = us_min, no_cv = isTRUE(no_cv), run_at = Sys.time())
 
   # ---- other US runs (the "for master" sheet: original, repeats, interassay) ----------
   alt_raw <- NULL; alt_us <- NULL
@@ -189,13 +193,14 @@ luminex_postqa <- function(data,
       ar <- cbind(ar, .lqa_parse_ids(ar$id)[, c("study", "id_num", "visit", "condition", "round", "parsed")])
       ar <- ar[ar$parsed & ar$condition == "us" & ar$visit %in% visits, , drop = FALSE]
       if (length(visits) > 1) ar$id_num <- paste0(ar$id_num, "_", ar$visit)
-      if (nrow(ar)) { alt_raw <- ar; alt_us <- .lqa_long(ar, analytes, "avg_mfi") }
+      if (nrow(ar)) { alt_raw <- ar; alt_us <- .lqa_long(ar, analytes, "avg_mfi"); if (isTRUE(no_cv)) alt_us$cv <- NA_real_ }
     }
   }
 
   # ---- missing & data entry (compact) --------------------------------------------
   integrity <- .lqa_integrity(raw, expected_conditions, unparsed, study, visit)
   long <- .lqa_long(raw, analytes, "avg_mfi")
+  if (isTRUE(no_cv)) long$cv <- NA_real_
   orig <- long[long$round == "original", , drop = FALSE]
   vals <- orig[!duplicated(orig[, c("id_num", "condition", "analyte")]), , drop = FALSE]
   missing <- .lqa_missing(vals, expected_conditions, analytes, NULL)
@@ -388,7 +393,7 @@ print.luminex_postqa <- function(x, ...) {
       below <- !is.na(x) & !is.na(us) & !zero & x <= us
       if (sum(below) >= k) { addp(p, "below_us", w, an[below]); flagged <- c(flagged, w) }
     }
-    if (!p %in% us_ignored) {
+    if (!p %in% us_ignored && !isTRUE(S$no_cv)) {
       cv <- .lpq_matrix(v, an, "us", "cv")[, 1]
       hi <- !is.na(cv) & !is.na(m[, "us"]) & cv > S$us_cv & m[, "us"] >= S$us_min
       if (any(hi)) addp(p, "us_cv", "us", an[hi], extra = paste0(an[hi], " cv ", round(cv[hi]), "%", collapse = ", "))

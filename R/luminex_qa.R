@@ -149,6 +149,8 @@ luminex_dose_series <- function(il10 = FALSE, cort = 4) {
 #' @param userinput_high_unit Units of the cutoffs: `"mfi"` (average MFI,
 #'   default) or `"conc"` (average concentration; text such as "OOR >" counts
 #'   as above).
+#' @param no_cv Set `TRUE` when the sheet has no CV columns (or they should
+#'   not be used): the cv% columns are left out of the report.
 #' @param highlight,high,high_unit Older names for the three arguments above;
 #'   still accepted.
 #' @param study,visit Labels for the report. Default: taken from the ids.
@@ -180,6 +182,7 @@ luminex_qa <- function(data,
                        userinput_ids = NULL,
                        userinput_high_cutoff = NULL,
                        userinput_high_unit = "mfi",
+                       no_cv = FALSE,
                        highlight = NULL,
                        high = NULL,
                        high_unit = NULL,
@@ -239,6 +242,7 @@ luminex_qa <- function(data,
 
   # ---- long format ----------------------------------------------------------
   long <- .lqa_long(raw, analytes, measure)
+  if (isTRUE(no_cv)) long$cv <- NA_real_
   orig <- long[long$round == "original", , drop = FALSE]
   extra <- unique(raw[raw$round != "original", c(".row", "id", "id_num", "condition", "round", "plate")])
   names(extra)[1] <- "excel_row"
@@ -292,6 +296,7 @@ luminex_qa <- function(data,
   if (!is.null(high_unit)) userinput_high_unit <- high_unit
   hl <- .lqa_highlight(userinput_ids, unique(vals$id_num))
   out$settings$highlight <- hl$keys
+  out$settings$no_cv <- isTRUE(no_cv)
   out$settings$highlight_not_found <- hl$not_found
   out$high <- .lqa_high(vals, userinput_high_cutoff, userinput_high_unit, analytes, expected_conditions)
   class(out) <- c("luminex_qa", "list")
@@ -341,7 +346,7 @@ print.luminex_qa <- function(x, ...) {
 }
 
 .lqa_parse_ids <- function(id) {
-  pat <- "^([A-Za-z]+)_([0-9]{3,4})_([Vv][0-9]+)_(.+?)(?:_((?i)repeat[0-9]*|rerun[0-9]*|interassay))?$"
+  pat <- "^([A-Za-z]+)_([0-9]{3,6})_([Vv][0-9]+)_(.+?)(?:_((?i)repeat[0-9]*|rerun[0-9]*|interassay))?$"
   m <- regmatches(id, regexec(pat, id, perl = TRUE))
   ok <- lengths(m) == 6
   get <- function(k) vapply(seq_along(m), function(i) if (ok[i]) m[[i]][k] else NA_character_, "")

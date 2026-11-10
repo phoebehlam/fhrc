@@ -411,7 +411,7 @@ panel <- function(p, issues, details) {
   w <- data.frame(condition = conds, stringsAsFactors = FALSE)
   for (a in an) w[[paste(a, "mfi")]] <- fmt(get(a, "mfi"), 0)
   for (a in an) w[[paste(a, "conc")]] <- conc_txt(a)
-  for (a in an) w[[paste(a, "cv%")]] <- fmt(get(a, "cv"), 1)
+  if (!isTRUE(S$no_cv)) for (a in an) w[[paste(a, "cv%")]] <- fmt(get(a, "cv"), 1)
   tbl(w)
 }
 for (p in ids_show) {
